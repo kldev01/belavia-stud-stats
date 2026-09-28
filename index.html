@@ -1,0 +1,2194 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>BELAVIA // ANALYTICS.SYS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chartjs-plugin-datalabels/2.2.0/chartjs-plugin-datalabels.min.js"></script>
+<style>
+:root{
+  --bg:#05060d;
+  --bg1:#080a18;
+  --panel:#0b0f22;
+  --panel2:#0e1330;
+  --line:rgba(0,229,255,.22);
+  --line-soft:rgba(120,150,255,.12);
+  --navy:#0a1442;
+  --blue:#2a5cff;
+  --cyan:#00e5ff;
+  --cyan-soft:#7df9ff;
+  --yellow:#f4e04d;
+  --purple:#b34bff;
+  --pink:#ff4dd8;
+  --text:#dbe6ff;
+  --text-dim:#7d8bc0;
+  --danger:#ff4d6d;
+  --good:#3dffb0;
+  --radius:10px;
+  --mono:'Share Tech Mono', ui-monospace, monospace;
+  --disp:'Orbitron', sans-serif;
+}
+*{box-sizing:border-box;}
+html{scroll-behavior:smooth;scroll-padding-top:20px;}
+body{
+  margin:0;
+  min-height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--mono);
+  overflow-x:hidden;
+  position:relative;
+  line-height:1.5;
+}
+::selection{background:var(--purple);color:#fff;}
+::-webkit-scrollbar{width:10px;}
+::-webkit-scrollbar-track{background:var(--bg1);}
+::-webkit-scrollbar-thumb{background:linear-gradient(var(--cyan),var(--purple));border-radius:6px;}
+
+/* ---------- background layers ---------- */
+#matrix-canvas,#rain-canvas{
+  position:fixed;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;
+}
+#matrix-canvas{opacity:.16;}
+#rain-canvas{opacity:0;transition:opacity 2.5s ease;}
+#rain-canvas.active{opacity:.5;}
+
+.grid-floor{
+  position:fixed;left:0;right:0;bottom:0;height:46vh;z-index:1;pointer-events:none;
+  background-image:
+    linear-gradient(rgba(0,229,255,.14) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,255,.14) 1px,transparent 1px);
+  background-size:44px 44px;
+  transform:perspective(320px) rotateX(62deg);
+  transform-origin:bottom;
+  mask-image:linear-gradient(to top, black, transparent);
+  -webkit-mask-image:linear-gradient(to top, black, transparent);
+}
+
+.skyline{
+  position:fixed;left:0;right:0;bottom:0;height:42vh;z-index:2;pointer-events:none;
+  display:flex;align-items:flex-end;gap:1px;
+  filter:drop-shadow(0 -6px 30px rgba(0,229,255,.06));
+  transition:filter 1.2s ease;
+}
+.skyline .b{
+  background:linear-gradient(180deg,#060812,#020306 75%);
+  border-top:1px solid rgba(120,150,255,.14);
+  position:relative;flex-shrink:0;
+}
+.skyline .b i{
+  position:absolute;width:3px;height:5px;background:var(--yellow);
+  box-shadow:0 0 4px var(--yellow);opacity:.85;
+}
+.skyline .b.purple-glow{box-shadow:inset 0 40px 60px -20px rgba(179,75,255,.15);}
+.skyline .b .spire{position:absolute;left:50%;bottom:100%;width:2px;background:#020306;transform:translateX(-50%);}
+.skyline .b .beacon{
+  position:absolute;left:50%;bottom:100%;width:5px;height:5px;border-radius:50%;transform:translateX(-50%) translateY(-3px);
+  background:var(--danger);box-shadow:0 0 8px 2px var(--danger);animation:beacon-blink 2.4s ease-in-out infinite;
+}
+@keyframes beacon-blink{0%,100%{opacity:1;}50%{opacity:.15;}}
+
+/* красный город + тряска при взломе (трясём только обычный контент и сам город — не body, чтобы не ломать fixed-слои) */
+body.egg-breach .skyline .b{
+  background:linear-gradient(180deg,#6a0012,#150004 80%);
+  border-top-color:#ff2d4d;
+  box-shadow:inset 0 34px 50px -16px rgba(255,30,60,.75),0 0 18px rgba(255,20,50,.55);
+  animation:bldg-alarm .5s steps(2) infinite;
+}
+body.egg-breach .skyline .b i{background:#ff5c73;box-shadow:0 0 6px #ff2d4d;}
+body.egg-breach .skyline .b .spire{background:#6a0012;}
+body.egg-breach .skyline .b > div:not(.beacon):not(.tower-flash):not(.spire){background:#6a0012 !important;border-top-color:#ff2d4d !important;}
+body.egg-breach .skyline,body.egg-breach.weather-rain .skyline{filter:drop-shadow(0 -6px 34px rgba(255,20,40,.45)) saturate(1.4) brightness(1.1);animation:breach-jitter .16s steps(2) infinite;}
+body.egg-breach .grid-floor{filter:hue-rotate(170deg) saturate(3);}
+body.egg-breach header.hero,body.egg-breach .wrap,body.egg-breach footer{animation:breach-jitter .14s steps(2) infinite;}
+@keyframes bldg-alarm{
+  0%{box-shadow:inset 0 34px 50px -16px rgba(255,30,60,.75),0 0 18px rgba(255,20,50,.55);}
+  100%{box-shadow:inset 0 60px 60px -10px rgba(255,80,90,.95),0 0 34px rgba(255,20,50,.9);}
+}
+@keyframes breach-jitter{
+  0%{transform:translate(0,0) skewX(0);}
+  15%{transform:translate(-7px,2px) skewX(-1.2deg);filter:drop-shadow(4px 0 rgba(255,0,60,.7)) drop-shadow(-4px 0 rgba(0,229,255,.6));}
+  30%{transform:translate(6px,-3px) skewX(.8deg);}
+  45%{transform:translate(-4px,-4px) skewX(0);filter:none;}
+  60%{transform:translate(8px,3px) skewX(1.4deg);filter:drop-shadow(-5px 0 rgba(255,0,60,.7)) drop-shadow(5px 0 rgba(0,229,255,.6));}
+  80%{transform:translate(-6px,4px) skewX(-.8deg);filter:none;}
+  100%{transform:translate(0,0) skewX(0);}
+}
+
+#particles{position:fixed;inset:0;z-index:2;pointer-events:none;overflow:hidden;}
+.mote{
+  position:absolute;bottom:-10px;border-radius:50%;
+  background:var(--cyan);box-shadow:0 0 8px 2px var(--cyan);
+  opacity:.5;animation:float-up linear infinite;
+}
+.mote.yellow{background:var(--yellow);box-shadow:0 0 8px 2px var(--yellow);}
+.mote.purple{background:var(--purple);box-shadow:0 0 8px 2px var(--purple);}
+@keyframes float-up{
+  0%{transform:translateY(0) translateX(0);opacity:0;}
+  10%{opacity:.6;}
+  90%{opacity:.4;}
+  100%{transform:translateY(-110vh) translateX(20px);opacity:0;}
+}
+
+.vignette{
+  position:fixed;inset:0;z-index:3;pointer-events:none;
+  background:radial-gradient(ellipse at 50% 30%, transparent 45%, rgba(0,0,0,.55) 100%);
+  transition:background 1.2s ease;
+}
+.scanlines{
+  position:fixed;inset:0;z-index:4;pointer-events:none;opacity:.06;
+  background:repeating-linear-gradient(0deg,#000 0px,#000 1px,transparent 2px,transparent 3px);
+  mix-blend-mode:overlay;
+}
+
+#fog-layer{
+  position:fixed;inset:-10% -10%;z-index:2;pointer-events:none;opacity:0;transition:opacity 2s ease;
+}
+#fog-layer .puff{
+  position:absolute;border-radius:50%;filter:blur(28px);
+  background:radial-gradient(circle,rgba(160,180,220,.20),transparent 70%);
+  animation:fog-drift linear infinite;
+}
+@keyframes fog-drift{
+  0%{transform:translateX(-6%) translateY(0);}
+  50%{transform:translateX(6%) translateY(-2%);}
+  100%{transform:translateX(-6%) translateY(0);}
+}
+
+body.weather-rain #matrix-canvas{opacity:0;transition:opacity 1.5s ease;}
+body.egg-breach #matrix-canvas{opacity:.5 !important;}
+body.weather-rain #rain-canvas{opacity:.55 !important;}
+body.weather-rain #fog-layer{opacity:1;}
+body.weather-rain .vignette{background:radial-gradient(ellipse at 50% 30%, transparent 25%, rgba(0,0,0,.78) 100%);}
+body.weather-rain .skyline{filter:brightness(.65) saturate(.8) drop-shadow(0 -6px 30px rgba(0,229,255,.04));}
+body.weather-rain .mote{opacity:.28;filter:blur(1px);}
+#matrix-canvas{transition:opacity 1.5s ease;}
+
+/* ---------- layout shells ---------- */
+.wrap{position:relative;z-index:5;max-width:1180px;margin:0 auto;padding:0 20px 80px;}
+
+header.hero{
+  position:relative;z-index:5;text-align:center;padding:100px 20px 70px;
+}
+.eyebrow-tag{
+  display:inline-flex;align-items:center;gap:8px;
+  font-size:12px;letter-spacing:2px;color:var(--cyan-soft);
+  border:1px solid var(--line);border-radius:20px;padding:5px 16px;
+  background:rgba(0,229,255,.05);
+}
+.eyebrow-tag .dot{width:6px;height:6px;border-radius:50%;background:var(--good);box-shadow:0 0 6px var(--good);animation:blink 1.6s infinite;cursor:pointer;transition:transform .4s ease;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:.25;}}
+
+h1.title{
+  font-family:var(--disp);font-weight:900;
+  font-size:clamp(32px,7vw,74px);
+  margin:26px auto 10px;letter-spacing:1px;
+  color:#eaf4ff;
+  position:relative;display:block;max-width:900px;
+  text-shadow:0 0 18px rgba(0,229,255,.5),0 0 48px rgba(179,75,255,.25);
+}
+h1.title .sub-word{color:var(--yellow);text-shadow:0 0 18px rgba(244,224,77,.6);}
+h1.title.glitch::before,h1.title.glitch::after{
+  content:attr(data-text);position:absolute;left:0;top:0;width:100%;height:100%;
+  background:var(--bg);overflow:hidden;
+}
+h1.title.glitch::before{
+  left:2px;text-shadow:-2px 0 var(--purple);clip-path:inset(0 0 0 0);
+  animation:glitch-a 3.4s infinite linear alternate-reverse;
+  color:#eaf4ff;background:transparent;
+}
+h1.title.glitch::after{
+  left:-2px;text-shadow:-2px 0 var(--cyan),2px 2px var(--pink);clip-path:inset(0 0 0 0);
+  animation:glitch-b 2.6s infinite linear alternate-reverse;
+  color:#eaf4ff;background:transparent;
+}
+@keyframes glitch-a{
+  0%,92%,100%{clip-path:inset(0 0 0 0);transform:translate(0,0);}
+  93%{clip-path:inset(10% 0 60% 0);transform:translate(-3px,-1px);}
+  95%{clip-path:inset(70% 0 5% 0);transform:translate(3px,1px);}
+  97%{clip-path:inset(30% 0 40% 0);transform:translate(-2px,0);}
+}
+@keyframes glitch-b{
+  0%,90%,100%{clip-path:inset(0 0 0 0);transform:translate(0,0);}
+  91%{clip-path:inset(50% 0 20% 0);transform:translate(3px,0);}
+  94%{clip-path:inset(5% 0 80% 0);transform:translate(-3px,1px);}
+  98%{clip-path:inset(60% 0 10% 0);transform:translate(2px,-1px);}
+}
+
+p.subtitle{
+  color:var(--text-dim);font-size:15px;letter-spacing:1px;max-width:620px;margin:0 auto;
+}
+p.subtitle .hl{color:var(--cyan-soft);}
+
+.run-btn{
+  margin-top:42px;font-family:var(--disp);font-weight:800;
+  font-size:16px;letter-spacing:2px;color:var(--yellow);
+  background:#0a0a08;
+  border:none;padding:22px 40px 19px;cursor:pointer;
+  position:relative;
+  clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);
+  box-shadow:0 0 0 1px var(--yellow), 0 0 16px rgba(244,224,77,.25);
+  transition:transform .15s ease, box-shadow .3s ease, color .2s ease, background .2s ease;
+  text-transform:uppercase;
+  overflow:hidden;
+}
+.run-btn::before,.run-btn::after{
+  content:'';position:absolute;left:0;right:0;height:6px;
+  background:repeating-linear-gradient(45deg,var(--yellow) 0 8px,#0a0a08 8px 16px);
+  opacity:.85;
+}
+.run-btn::before{top:0;}
+.run-btn::after{bottom:0;}
+.run-btn:hover{
+  color:#0a0a08;background:var(--yellow);
+  box-shadow:0 0 0 1px var(--yellow), 0 0 26px rgba(244,224,77,.55);
+  transform:translateY(-2px);
+}
+.run-btn:hover::before,.run-btn:hover::after{background:repeating-linear-gradient(45deg,#0a0a08 0 8px,var(--yellow) 8px 16px);}
+.run-btn:active{transform:translateY(0);}
+.run-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+.run-btn small{
+  display:block;font-family:var(--mono);font-weight:400;font-size:10.5px;letter-spacing:1px;
+  opacity:.7;margin-top:5px;text-transform:none;
+}
+
+/* ---------- terminal overlay ---------- */
+#terminal-overlay{
+  position:fixed;inset:0;z-index:50;background:rgba(2,3,10,.88);backdrop-filter:blur(3px);
+  display:flex;align-items:center;justify-content:center;padding:20px;
+  opacity:0;pointer-events:none;transition:opacity .4s ease;
+}
+#terminal-overlay.show{opacity:1;pointer-events:all;}
+.terminal-win{
+  width:100%;max-width:640px;background:#040713;border:1px solid var(--line);
+  border-radius:8px;box-shadow:0 0 60px rgba(0,229,255,.25),0 0 120px rgba(179,75,255,.15);
+  overflow:hidden;
+}
+.terminal-bar{
+  display:flex;align-items:center;gap:8px;padding:10px 14px;
+  background:linear-gradient(90deg,#0a0e22,#0d1330);border-bottom:1px solid var(--line-soft);
+  font-size:11px;color:var(--text-dim);letter-spacing:1px;
+}
+.terminal-bar span.d{width:10px;height:10px;border-radius:50%;display:inline-block;}
+.terminal-bar .d1{background:#ff5f56;}
+.terminal-bar .d2{background:#ffbd2e;}
+.terminal-bar .d3{background:#27c93f;}
+.terminal-body{
+  padding:22px 20px;min-height:220px;max-height:50vh;overflow-y:auto;
+  font-size:13px;color:var(--good);
+}
+.terminal-body .ln{white-space:pre-wrap;word-break:break-word;margin-bottom:3px;}
+.terminal-body .ln.tag{color:var(--cyan-soft);}
+.terminal-body .ln.err{color:var(--danger);}
+.terminal-body .ln.warn{color:var(--yellow);}
+.cursor-blink{display:inline-block;width:8px;height:14px;background:var(--good);margin-left:2px;animation:blink .9s steps(1) infinite;vertical-align:middle;}
+.spinner-wrap{display:flex;align-items:center;gap:12px;padding:0 20px 20px;}
+.spinner{
+  width:22px;height:22px;border-radius:50%;
+  border:3px solid rgba(0,229,255,.2);border-top-color:var(--cyan);
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+.spinner-label{font-size:12px;color:var(--text-dim);letter-spacing:1px;}
+.progress-track{height:4px;background:rgba(255,255,255,.08);border-radius:3px;margin:0 20px 20px;overflow:hidden;}
+.progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--cyan),var(--purple));transition:width .3s ease;box-shadow:0 0 8px var(--cyan);}
+
+/* ---------- dashboard ---------- */
+#dashboard{opacity:0;transform:translateY(10px);transition:opacity .6s ease, transform .6s ease;}
+#dashboard.show{opacity:1;transform:translateY(0);}
+#dashboard.hidden-init{display:none;}
+
+.section{
+  margin:0 0 54px;padding-top:26px;
+  opacity:0;transform:translateY(16px);
+  transition:opacity .55s ease, transform .55s ease;
+}
+.section.in{opacity:1;transform:translateY(0);}
+
+.section-head{display:flex;align-items:baseline;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+.section-head .idx{font-family:var(--disp);font-size:12px;color:var(--text-dim);letter-spacing:2px;}
+.section-head h2{
+  font-family:var(--disp);font-size:clamp(18px,2.6vw,26px);margin:0;color:#eaf4ff;
+  font-weight:700;letter-spacing:.5px;
+  text-shadow:0 0 14px rgba(0,229,255,.35);
+}
+.section-head h2 .emo{margin-right:8px;}
+.section-head .line{flex:1;height:1px;background:linear-gradient(90deg,var(--line),transparent);min-width:40px;}
+.section-desc{color:var(--text-dim);font-size:13px;margin:-8px 0 18px;max-width:640px;}
+
+.panel{
+  background:linear-gradient(160deg,rgba(15,20,45,.75),rgba(8,10,22,.85));
+  border:1px solid var(--line-soft);border-radius:var(--radius);
+  padding:20px;position:relative;overflow:hidden;
+  transition:background .5s ease, border-color .5s ease, box-shadow .5s ease;
+}
+.panel::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--cyan),var(--purple),var(--yellow));opacity:.8;
+}
+/* ---- alternate "hologram" theme for stat panels ---- */
+body.theme-holo .panel{
+  background:rgba(7,12,28,.4);
+  border:1px solid rgba(0,229,255,.4);
+  border-radius:4px;
+  box-shadow:0 0 22px rgba(0,229,255,.14), inset 0 0 40px rgba(0,229,255,.05);
+  backdrop-filter:blur(8px) saturate(1.3);
+}
+body.theme-holo .panel::before{
+  background:linear-gradient(90deg,transparent,var(--cyan-soft),transparent);
+  height:1px;opacity:.7;
+}
+body.theme-holo .panel::after{
+  content:'';position:absolute;inset:0;pointer-events:none;opacity:.8;
+  background-image:
+    linear-gradient(var(--cyan-soft),var(--cyan-soft)), linear-gradient(var(--cyan-soft),var(--cyan-soft)),
+    linear-gradient(var(--cyan-soft),var(--cyan-soft)), linear-gradient(var(--cyan-soft),var(--cyan-soft)),
+    linear-gradient(var(--cyan-soft),var(--cyan-soft)), linear-gradient(var(--cyan-soft),var(--cyan-soft)),
+    linear-gradient(var(--cyan-soft),var(--cyan-soft)), linear-gradient(var(--cyan-soft),var(--cyan-soft));
+  background-size:14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px, 14px 2px, 2px 14px;
+  background-position:top left, top left, top right, top right, bottom left, bottom left, bottom right, bottom right;
+  background-repeat:no-repeat;
+}
+body.theme-holo .scale-bar-track{background:rgba(0,229,255,.05);border-color:rgba(0,229,255,.35);}
+body.theme-holo .stat-big .num{ text-shadow:0 0 10px currentColor; }
+body.theme-holo .section-head h2{ text-shadow:0 0 7px rgba(0,229,255,.2); }
+body.theme-holo h1.title{ text-shadow:0 0 10px rgba(0,229,255,.3),0 0 22px rgba(179,75,255,.14); }
+body.theme-holo .scale-top .avg{ text-shadow:0 0 6px rgba(244,224,77,.3); }
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;}
+.grid-auto{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:18px;}
+@media(max-width:760px){.grid2,.grid3{grid-template-columns:1fr;}}
+
+.chart-box{position:relative;height:260px;}
+.chart-box.small{height:190px;}
+
+/* hero stat numbers */
+.stat-big{
+  text-align:center;padding:26px 14px;
+}
+.stat-big .num{
+  font-family:var(--disp);font-weight:900;font-size:clamp(30px,5vw,52px);
+  color:var(--cyan-soft);text-shadow:0 0 20px rgba(0,229,255,.5);
+  font-variant-numeric:tabular-nums;
+}
+.stat-big .num.yellow{color:var(--yellow);text-shadow:0 0 20px rgba(244,224,77,.5);}
+.stat-big .num.purple{color:var(--purple);text-shadow:0 0 20px rgba(179,75,255,.5);}
+.stat-big .lbl{margin-top:6px;font-size:12.5px;color:var(--text-dim);letter-spacing:1px;}
+
+/* legend chips */
+.legend-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+.chip{
+  display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--text-dim);
+  border:1px solid var(--line-soft);border-radius:16px;padding:4px 10px;background:rgba(255,255,255,.02);
+}
+.chip .sw{width:9px;height:9px;border-radius:50%;}
+
+/* scale / gauge component */
+.scale-card{margin-bottom:16px;}
+.scale-card:last-child{margin-bottom:0;}
+.scale-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:10px;flex-wrap:wrap;}
+.scale-top .name{font-size:13px;color:var(--text);}
+.scale-top .avg{
+  font-family:var(--disp);font-size:20px;color:var(--yellow);display:flex;align-items:center;gap:6px;
+}
+.scale-top .avg .face{font-size:20px;}
+.scale-bar-track{
+  position:relative;height:14px;border-radius:8px;background:rgba(255,255,255,.06);overflow:hidden;
+  border:1px solid var(--line-soft);
+}
+.scale-bar-fill{
+  height:100%;border-radius:8px;background:linear-gradient(90deg,var(--purple),var(--cyan) 60%,var(--yellow));
+  box-shadow:0 0 10px rgba(0,229,255,.4);
+}
+.scale-meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--text-dim);margin-top:4px;letter-spacing:.5px;}
+.scale-dist{display:flex;gap:4px;margin-top:34px;height:26px;position:relative;}
+.scale-dist i{flex:1;border-radius:2px 2px 0 0;background:rgba(0,229,255,.18);position:relative;align-self:flex-end;min-height:2px;}
+.scale-dist i span.cnt{position:absolute;bottom:100%;left:0;right:0;text-align:center;font-size:8.5px;line-height:1.35;color:var(--text-dim);margin-bottom:3px;}
+.scale-dist i span.val{position:absolute;top:100%;left:0;right:0;text-align:center;font-size:9.5px;color:var(--cyan-soft);margin-top:4px;white-space:nowrap;}
+.scale-dist-wrap{margin-bottom:6px;}
+.scale-dist-caption{font-size:10px;color:var(--text-dim);margin-top:14px;opacity:.75;}
+.sample-warn{
+  font-size:11px;color:var(--yellow);background:rgba(244,224,77,.08);border:1px dashed rgba(244,224,77,.4);
+  border-radius:6px;padding:7px 10px;margin:8px 0 4px;line-height:1.4;
+}
+
+/* text / open answers */
+.text-list{display:flex;flex-direction:column;gap:10px;}
+.text-item{
+  border-left:2px solid var(--cyan);background:rgba(255,255,255,.03);
+  padding:10px 14px;border-radius:0 6px 6px 0;font-size:13px;color:var(--text);
+}
+.text-item::before{content:'> ';color:var(--cyan-soft);}
+.toggle-btn{
+  margin-top:12px;font-family:var(--mono);font-size:12px;letter-spacing:1px;
+  color:var(--cyan-soft);background:transparent;border:1px solid var(--line);border-radius:6px;
+  padding:8px 16px;cursor:pointer;transition:.2s;
+}
+.toggle-btn:hover{background:rgba(0,229,255,.08);}
+.empty-note{color:var(--text-dim);font-size:12.5px;font-style:italic;}
+
+/* control pair */
+.control-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media(max-width:700px){.control-grid{grid-template-columns:1fr;}}
+.control-item{text-align:center;padding:14px;}
+.control-item .q{font-size:12.5px;color:var(--text-dim);margin-bottom:10px;min-height:32px;}
+.control-item .ratio{font-family:var(--disp);font-size:28px;color:var(--good);}
+.control-item .ratio.low{color:var(--danger);}
+
+/* device/os section */
+.badge-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px;}
+.os-badge{
+  display:flex;align-items:center;gap:8px;border:1px solid var(--line-soft);border-radius:8px;
+  padding:8px 12px;font-size:12.5px;background:rgba(255,255,255,.02);min-width:120px;
+}
+.os-badge .pct{margin-left:auto;color:var(--yellow);font-family:var(--disp);}
+
+/* search tool */
+.search-panel .filters{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:18px;}
+.field-label{font-size:10.5px;letter-spacing:1.5px;color:var(--text-dim);margin-bottom:5px;display:block;}
+select.cyber-select{
+  width:100%;background:#0a0e20;border:1px solid var(--line);color:var(--text);
+  padding:10px;border-radius:6px;font-family:var(--mono);font-size:12.5px;cursor:pointer;
+}
+select.cyber-select:focus{outline:2px solid var(--cyan);}
+.search-btn{
+  font-family:var(--disp);letter-spacing:1.5px;font-weight:800;color:var(--yellow);
+  background:#0a0a08;border:none;
+  padding:13px 28px;cursor:pointer;font-size:13px;text-transform:uppercase;
+  clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);
+  box-shadow:0 0 0 1px var(--yellow), 0 0 16px rgba(244,224,77,.3);
+  transition:.2s;
+}
+.search-btn:hover{background:var(--yellow);color:#0a0a08;box-shadow:0 0 0 1px var(--yellow),0 0 28px rgba(244,224,77,.6);}
+.reset-btn{
+  font-family:var(--mono);font-size:12px;color:var(--text-dim);background:transparent;
+  border:1px solid var(--line-soft);border-radius:6px;padding:12px 18px;cursor:pointer;margin-left:10px;
+}
+
+/* top-left control button group: weather mode + panel theme */
+.top-left-controls{position:fixed;top:14px;left:14px;z-index:20;display:flex;gap:8px;flex-wrap:wrap;max-width:60vw;}
+.ctrl-btn{
+  display:flex;align-items:center;gap:8px;
+  background:rgba(6,9,20,.7);border:1px solid var(--line-soft);color:var(--text-dim);
+  border-radius:20px;padding:7px 14px 7px 10px;cursor:pointer;backdrop-filter:blur(4px);
+  font-size:11px;font-family:var(--mono);letter-spacing:.5px;
+}
+.ctrl-btn:hover{border-color:var(--cyan);color:var(--cyan-soft);}
+.ctrl-btn .ic{font-size:14px;line-height:1;}
+@media(max-width:600px){
+  .ctrl-btn{padding:9px;border-radius:50%;}
+  .ctrl-btn .label{display:none;}
+}
+
+/* section header accent */
+.section-head h2{position:relative;}
+.section-head h2::after{
+  content:'';position:absolute;left:0;bottom:-6px;width:38px;height:2px;
+  background:linear-gradient(90deg,var(--cyan),transparent);
+}
+.person-icon{display:inline-block;vertical-align:-6px;margin-right:6px;filter:drop-shadow(0 0 5px currentColor);}
+.person-row{display:inline-flex;gap:0;margin-right:8px;vertical-align:-8px;}
+.person-row .person-icon{margin-right:-2px;}
+#search-result{margin-top:22px;}
+.result-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:14px;}
+.result-table th,.result-table td{border-bottom:1px solid var(--line-soft);padding:8px 10px;text-align:left;}
+.result-table th{color:var(--cyan-soft);font-weight:400;letter-spacing:.5px;}
+.result-table td.num{color:var(--yellow);font-family:var(--disp);}
+.result-empty{color:var(--text-dim);font-size:13px;padding:20px 0;text-align:center;}
+
+/* footer */
+footer{
+  position:relative;z-index:5;text-align:center;padding:34px 20px 50px;
+  color:var(--text-dim);font-size:11.5px;letter-spacing:1px;border-top:1px solid var(--line-soft);
+  margin-top:20px;
+}
+footer .glow{color:var(--cyan-soft);}
+
+.jump-nav{position:fixed;top:14px;right:14px;z-index:20;font-size:11px;}
+.jump-nav button{
+  background:rgba(6,9,20,.7);border:1px solid var(--line-soft);color:var(--text-dim);
+  border-radius:20px;padding:7px 14px;cursor:pointer;backdrop-filter:blur(4px);
+}
+@media(max-width:600px){
+  .jump-nav button{padding:9px;border-radius:50%;}
+  .jump-nav .label{display:none;}
+}
+
+@media (max-width:640px){
+  header.hero{padding:70px 16px 46px;}
+  .run-btn{padding:15px 26px;font-size:14px;}
+  .panel{padding:14px;}
+}
+.back-to-top{
+  position:fixed;left:50%;bottom:22px;z-index:20;
+  width:44px;height:44px;border-radius:50%;
+  background:rgba(6,9,20,.75);border:1px solid var(--line-soft);color:var(--cyan-soft);
+  font-size:16px;cursor:pointer;backdrop-filter:blur(4px);
+  opacity:0;pointer-events:none;
+  transform:translateX(-50%) translateY(16px);
+  transition:opacity .3s ease, transform .3s ease, border-color .2s ease, box-shadow .2s ease;
+}
+.back-to-top.visible{opacity:1;pointer-events:all;transform:translateX(-50%) translateY(0);}
+.back-to-top:hover{border-color:var(--cyan);box-shadow:0 0 16px rgba(0,229,255,.4);}
+.hidden{display:none !important;}
+
+/* ---------- easter eggs ---------- */
+#toast-root{position:fixed;top:70px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;}
+.egg-toast{
+  font-family:var(--mono);font-size:12px;letter-spacing:.5px;color:var(--cyan-soft);
+  background:rgba(4,7,19,.9);border:1px solid var(--line);border-radius:6px;padding:9px 16px;
+  box-shadow:0 0 18px rgba(0,229,255,.25);opacity:0;transform:translateY(-8px);
+  transition:opacity .35s ease, transform .35s ease;white-space:nowrap;max-width:88vw;
+}
+.egg-toast.show{opacity:1;transform:translateY(0);}
+
+@keyframes screen-shake{
+  0%,100%{transform:translate(0,0);}
+  20%{transform:translate(-4px,2px);}
+  40%{transform:translate(4px,-2px);}
+  60%{transform:translate(-3px,-3px);}
+  80%{transform:translate(3px,3px);}
+}
+
+#breach-overlay{
+  position:fixed;inset:0;z-index:55;pointer-events:none;opacity:0;
+  background:rgba(120,0,10,.16);transition:opacity .4s ease;
+}
+#breach-overlay.show{opacity:1;animation:breach-flash .45s steps(3) infinite;}
+@keyframes breach-flash{0%{background:rgba(120,0,10,.16);}33%{background:rgba(255,20,40,.28);}66%{background:rgba(60,0,6,.22);}100%{background:rgba(160,0,14,.2);}}
+#breach-overlay .glitch-bar{position:absolute;left:0;right:0;background:rgba(255,40,60,.55);mix-blend-mode:screen;}
+#breach-overlay .glitch-block{
+  position:absolute;background:rgba(255,20,40,.5);mix-blend-mode:screen;
+  animation:glitch-block-flicker .25s steps(2) infinite;
+}
+@keyframes glitch-block-flicker{0%,100%{opacity:.7;}50%{opacity:0;}}
+#breach-text{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:56;
+  font-family:var(--disp);font-weight:900;color:#ff2d4d;font-size:clamp(20px,5vw,44px);
+  text-shadow:0 0 20px rgba(255,45,77,.9), 3px 0 #00e5ff, -3px 0 #ff4dd8;
+  letter-spacing:2px;text-align:center;opacity:0;pointer-events:none;
+  text-transform:uppercase;white-space:pre-line;
+}
+#breach-text.show{opacity:1;animation:glitch-a 0.6s infinite linear alternate-reverse;}
+
+#ghost-flicker{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:8;
+  font-family:var(--mono);color:var(--cyan-soft);font-size:15px;letter-spacing:3px;
+  text-shadow:0 0 10px var(--cyan-soft);
+  opacity:0;pointer-events:none;white-space:pre-line;text-align:center;
+}
+#ghost-flicker.show{animation:ghost-flicker-seq 3.2s ease forwards;}
+@keyframes ghost-flicker-seq{
+  0%{opacity:0;}
+  6%{opacity:1;} 10%{opacity:.2;} 14%{opacity:1;} 18%{opacity:.3;} 24%{opacity:1;}
+  70%{opacity:1;}
+  100%{opacity:0;filter:blur(3px);}
+}
+
+#footer-sig{cursor:default;}
+
+/* --- flying greeting (footer triple-click egg) --- */
+.flying-greeting{
+  position:fixed;top:0;left:0;z-index:70;pointer-events:none;
+  font-family:var(--disp);font-weight:800;font-size:clamp(15px,2.6vw,22px);color:var(--yellow);
+  white-space:nowrap;animation:fly-wave 3.4s ease-in-out forwards, flicker-yellow .22s steps(2) infinite;
+}
+@keyframes fly-wave{
+  0%{transform:translate(-20vw,45vh) scale(.7);opacity:0;}
+  8%{opacity:1;}
+  25%{transform:translate(15vw,18vh) scale(1);}
+  45%{transform:translate(42vw,58vh) scale(1.05);}
+  65%{transform:translate(68vw,14vh) scale(1);}
+  85%{transform:translate(92vw,48vh) scale(1);opacity:1;}
+  100%{transform:translate(115vw,30vh) scale(.85);opacity:0;}
+}
+@keyframes flicker-yellow{0%,100%{text-shadow:0 0 10px var(--yellow),0 0 22px var(--yellow);}50%{text-shadow:0 0 2px var(--yellow);}}
+
+
+/* --- corp-tower incoming transmission egg --- */
+.tower-flash{position:absolute;inset:0;color:var(--tc,#00e5ff);background:radial-gradient(ellipse 130% 85% at 50% 0%,currentColor,transparent 78%);opacity:0;animation:tower-flash-anim 2.2s ease forwards;pointer-events:none;}
+@keyframes tower-flash-anim{0%{opacity:0;}12%{opacity:.95;}100%{opacity:0;}}
+
+
+/* --- person-icon wink egg --- */
+.person-icon.winking{animation:person-wink .5s ease;}
+@keyframes person-wink{0%,100%{transform:scale(1) rotate(0);}30%{transform:scale(1.3) rotate(-8deg);}60%{transform:scale(1.15) rotate(6deg);}}
+
+/* --- sudo joke egg --- */
+#sudo-popup{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:70;
+  width:min(420px,90vw);background:#040713;border:1px solid var(--good);border-radius:8px;overflow:hidden;
+  box-shadow:0 0 24px rgba(61,255,176,.3);opacity:0;pointer-events:none;transition:opacity .3s ease;
+  font-family:var(--mono);font-size:12.5px;color:var(--good);
+}
+#sudo-popup.show{opacity:1;}
+#sudo-popup .sudo-bar{padding:7px 12px;background:#0a1226;border-bottom:1px solid rgba(61,255,176,.25);font-size:11px;color:var(--text-dim);letter-spacing:1px;}
+#sudo-popup .sudo-body{padding:12px 14px;min-height:96px;}
+#sudo-popup .sudo-body div{margin-bottom:3px;white-space:pre-wrap;}
+
+a:focus-visible,button:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px;}
+
+/* --- db-word egg --- */
+#db-word{cursor:crosshair;transition:color .25s ease,text-shadow .25s ease;}
+#db-word:hover{color:var(--yellow);text-shadow:0 0 10px rgba(244,224,77,.7);}
+#db-word.denied{color:var(--danger);text-shadow:0 0 10px rgba(255,77,109,.8);}
+
+/* --- rainbow city egg --- */
+@keyframes bldg-rainbow{
+  0%{box-shadow:inset 0 0 34px rgba(179,75,255,.75),0 0 16px rgba(179,75,255,.6);border-top-color:#b34bff;}
+  20%{box-shadow:inset 0 0 34px rgba(0,229,255,.75),0 0 16px rgba(0,229,255,.6);border-top-color:#00e5ff;}
+  40%{box-shadow:inset 0 0 34px rgba(244,224,77,.7),0 0 16px rgba(244,224,77,.55);border-top-color:#f4e04d;}
+  60%{box-shadow:inset 0 0 34px rgba(255,77,216,.75),0 0 16px rgba(255,77,216,.6);border-top-color:#ff4dd8;}
+  80%{box-shadow:inset 0 0 34px rgba(61,255,176,.7),0 0 16px rgba(61,255,176,.55);border-top-color:#3dffb0;}
+  100%{box-shadow:inset 0 0 34px rgba(179,75,255,.75),0 0 16px rgba(179,75,255,.6);border-top-color:#b34bff;}
+}
+.skyline.rainbow .b{animation:bldg-rainbow 3s linear infinite;}
+
+/* --- creepy text egg --- */
+@keyframes creepy-flicker{0%,100%{opacity:1;}50%{opacity:.7;}}
+.creepy-text{color:#ff5c73 !important;text-shadow:0 0 12px rgba(255,45,77,.8),2px 0 #00e5ff !important;letter-spacing:3px;animation:creepy-flicker .18s steps(2) infinite;}
+h1.title.creepy-text::before,h1.title.creepy-text::after{color:#ff5c73;}
+
+.back-to-top{touch-action:none;-webkit-touch-callout:none;user-select:none;-webkit-user-select:none;}
+.scale-top .avg .face{cursor:default;display:inline-block;transition:transform .2s ease;}
+.scale-top .avg .face:hover{transform:scale(1.25) rotate(-6deg);}
+
+/* --- rain mode: мрачные серые частицы --- */
+body.weather-rain .mote,body.weather-rain .mote.yellow,body.weather-rain .mote.purple{
+  background:#8b93a8;box-shadow:0 0 6px 1px rgba(139,147,168,.5);
+}
+body.weather-rain .grid-floor{opacity:.35;}
+body.weather-rain .skyline .b i{opacity:.4;}
+
+@media (prefers-reduced-motion: reduce){
+  *{animation-duration:0.001ms !important;animation-iteration-count:1 !important;transition-duration:0.001ms !important;}
+  #matrix-canvas,#rain-canvas,#particles,.mote{display:none !important;}
+}
+</style>
+</head>
+<body class="theme-holo">
+<canvas id="matrix-canvas"></canvas>
+<canvas id="rain-canvas"></canvas>
+<div id="fog-layer"></div>
+<div class="grid-floor"></div>
+<div class="skyline" id="skyline"></div>
+<div id="particles"></div>
+<div class="vignette"></div>
+<div class="scanlines"></div>
+
+<div class="top-left-controls">
+  <button class="ctrl-btn" id="weather-toggle"><span class="ic">👾</span><span class="label" id="weather-toggle-label">РЕЖИМ: МАТРИЦА</span></button>
+  <button class="ctrl-btn" id="theme-toggle"><span class="ic">🔮</span><span class="label" id="theme-toggle-label">ТЕМА: ГОЛОГРАММА</span></button>
+</div>
+<div class="jump-nav"><button id="jump-search-btn"><span class="ic">🔎</span><span class="label"> к поиску по критериям</span></button></div>
+<button class="back-to-top" id="back-to-top" title="Наверх" aria-label="Наверх">▲</button>
+
+<header class="hero">
+  <span class="eyebrow-tag"><span class="dot"></span> SYSTEM CORE ACTIVE // ANOMALIES DETECTED: 10</span>
+  <h1 class="title glitch" data-text="BELAVIA ANALYTICS">BELAVIA <span class="sub-word">ANALYTICS</span></h1>
+  <p class="subtitle">Система обработки ответов пассажирского опроса. Сырые данные поступают из <span class="hl" id="db-word">базы данных</span>,
+  проходят проверку на подлинность и превращаются в статистику в реальном времени.</p>
+  <button class="run-btn" id="run-btn">// JACK IN: ЗАПУСТИТЬ АНАЛИЗ //<small>&gt; netrunner.uplink --mode=analyze</small></button>
+</header>
+
+<div id="terminal-overlay">
+  <div class="terminal-win">
+    <div class="terminal-bar"><span class="d d1"></span><span class="d d2"></span><span class="d d3"></span> root@belavia-analytics:~#</div>
+    <div class="terminal-body" id="terminal-text"></div>
+    <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="spinner-wrap"><div class="spinner"></div><div class="spinner-label" id="spinner-label">ИНИЦИАЛИЗАЦИЯ...</div></div>
+  </div>
+</div>
+
+<main class="wrap" id="dashboard-wrap">
+<div id="dashboard" class="hidden-init">
+
+  <section class="section" id="sec-hero-stats">
+    <div class="section-head"><span class="idx">// 00</span><h2><span class="emo">📊</span>Сводка по опросу</h2><span class="line"></span></div>
+    <p class="section-desc">Базовые показатели по всем полученным анкетам, до разбивки по вопросам.</p>
+    <div class="panel"><div class="grid-auto" id="hero-numbers"></div></div>
+    <div class="panel" id="hero-timeline-panel" style="margin-top:18px;"></div>
+  </section>
+
+  <section class="section" id="sec-demographics">
+    <div class="section-head"><span class="idx">// 01</span><h2><span class="person-row">
+      <svg class="person-icon" style="color:var(--cyan-soft)" width="18" height="26" viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="5" r="4" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="9" x2="10" y2="19" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="12" x2="4" y2="17" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="12" x2="16" y2="17" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="19" x2="5" y2="27" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="19" x2="15" y2="27" stroke="currentColor" stroke-width="1.7"/></svg><svg class="person-icon" style="color:var(--pink)" width="18" height="26" viewBox="0 0 20 28" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="10" cy="5" r="4" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="9" x2="10" y2="19" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="12" x2="4" y2="17" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="12" x2="16" y2="17" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="19" x2="5" y2="27" stroke="currentColor" stroke-width="1.7"/><line x1="10" y1="19" x2="15" y2="27" stroke="currentColor" stroke-width="1.7"/></svg></span>Кто проходил опрос</h2><span class="line"></span></div>
+    <p class="section-desc">Пол, возраст и география респондентов — самые общие срезы аудитории.</p>
+    <div class="grid3" id="demographics-grid"></div>
+  </section>
+
+  <section class="section" id="sec-device">
+    <div class="section-head"><span class="idx">// 02</span><h2><span class="emo">📟</span>С каких устройств проходили опрос</h2><span class="line"></span></div>
+    <p class="section-desc">Технический профиль по User-Agent: тип устройства, операционная система, браузер.</p>
+    <div class="grid3" id="device-grid"></div>
+  </section>
+
+  <div id="questions-root"></div>
+
+  <section class="section" id="sec-search">
+    <div class="section-head"><span class="idx">// 99</span><h2><span class="emo">🔎</span>Поиск по критериям</h2><span class="line"></span></div>
+    <p class="section-desc">Сузьте выборку по нескольким параметрам и получите статистику только по нужному сегменту респондентов.</p>
+    <div class="panel search-panel">
+      <div class="filters" id="search-filters"><p class="empty-note">⏳ сначала запустите анализ данных кнопкой наверху страницы — после загрузки здесь появятся фильтры.</p></div>
+      <button class="search-btn" id="search-go">▶ НАЙТИ СЕГМЕНТ</button>
+      <button class="reset-btn" id="search-reset">✕ сбросить</button>
+      <div id="search-result"></div>
+    </div>
+  </section>
+
+</div>
+</main>
+
+<div id="toast-root"></div>
+<div id="breach-overlay"></div>
+<div id="breach-text"></div>
+<div id="ghost-flicker"></div>
+<div id="sudo-popup"></div>
+
+<footer>© 2026 <span id="footer-sig">kldev01</span>. Все права защищены. <span class="glow">// END OF TRANSMISSION</span></footer>
+<script>
+/* =========================================================
+   CONFIG
+========================================================= */
+const PROJECT_ID = 'belavia-stud-oprosiche';
+const RESPONSES_URL = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/responses`;
+const MARKERS = [':be','!gtb',',xuk'];
+const META_TEXT_FIELDS = ['_meta_ua','_meta_ip','_meta_fingerprint','_meta_deviceTag','_meta_netInfo'];
+
+const PALETTE = ['#00e5ff','#b34bff','#f4e04d','#2a5cff','#ff4dd8','#3dffb0','#ff8a3d','#7d8bc0','#4dfff0','#9d4dff'];
+const FACE = {1:'😖',2:'🙁',3:'😐',4:'🙂',5:'🤩'};
+const FACE_LABEL = {1:'Плохо',2:'Так себе',3:'Нормально',4:'Хорошо',5:'Отлично'};
+
+Chart.defaults.color = '#9fb0e0';
+Chart.defaults.font.family = "'Share Tech Mono', monospace";
+Chart.defaults.borderColor = 'rgba(120,150,255,.12)';
+if(typeof ChartDataLabels !== 'undefined'){ Chart.register(ChartDataLabels); }
+function truncateLabel(s, n){
+  n = n || 22;
+  if(typeof window !== 'undefined' && window.innerWidth > 820) n += 10;
+  s = String(s);
+  return s.length > n ? s.slice(0, n-1).trimEnd()+'…' : s;
+}
+
+/* =========================================================
+   FIRESTORE FETCH + PARSE
+========================================================= */
+function parseFSValue(v){
+  if(v==null) return null;
+  if('stringValue' in v) return v.stringValue;
+  if('integerValue' in v) return parseInt(v.integerValue,10);
+  if('doubleValue' in v) return v.doubleValue;
+  if('booleanValue' in v) return v.booleanValue;
+  if('nullValue' in v) return null;
+  if('timestampValue' in v) return v.timestampValue;
+  if('mapValue' in v){
+    const o={}; const f=(v.mapValue&&v.mapValue.fields)||{};
+    for(const k in f) o[k]=parseFSValue(f[k]);
+    return o;
+  }
+  if('arrayValue' in v){
+    const vals=(v.arrayValue&&v.arrayValue.values)||[];
+    return vals.map(parseFSValue);
+  }
+  return null;
+}
+function parseDoc(doc){
+  const out={_id: doc.name ? doc.name.split('/').pop() : Math.random().toString(36).slice(2)};
+  const f=doc.fields||{};
+  for(const k in f) out[k]=parseFSValue(f[k]);
+  return out;
+}
+async function fetchAllResponses(onProgress){
+  let pageToken=null, all=[], page=0;
+  do{
+    page++;
+    const url = RESPONSES_URL + '?pageSize=300' + (pageToken? ('&pageToken='+encodeURIComponent(pageToken)) : '');
+    const res = await fetch(url);
+    if(!res.ok){ throw new Error('Ошибка базы данных, код '+res.status); }
+    const data = await res.json();
+    const docs = data.documents || [];
+    all = all.concat(docs.map(parseDoc));
+    pageToken = data.nextPageToken || null;
+    if(onProgress) onProgress(all.length, page, !!pageToken);
+  } while(pageToken);
+  return all;
+}
+
+/* =========================================================
+   VALIDATION / ANTI-FRAUD
+========================================================= */
+function isVerified(doc){
+  if(doc._meta_suspicious === true) return false;
+  const combined = META_TEXT_FIELDS.map(k => (doc[k]!=null? String(doc[k]) : '')).join(' | ');
+  return MARKERS.every(m => combined.includes(m));
+}
+
+/* =========================================================
+   USER-AGENT PARSING
+========================================================= */
+function parseUA(uaRaw){
+  const ua = uaRaw || '';
+  const isTablet = /iPad/i.test(ua) || (/Android/i.test(ua) && !/Mobile/i.test(ua) && /Tablet|SM-T|Tab/i.test(ua)) || /Tablet/i.test(ua);
+  const isMobile = !isTablet && /Mobi|iPhone|Android/i.test(ua);
+  const device = isTablet ? 'Планшет 📱' : (isMobile ? 'Смартфон 📲' : 'Компьютер 🖥️');
+
+  let os = 'Другое';
+  if(/Windows/i.test(ua)) os='Windows';
+  else if(/Android/i.test(ua)) os='Android';
+  else if(/iPhone|iPad|iPod|iOS/i.test(ua)) os='iOS';
+  else if(/Mac OS X|Macintosh/i.test(ua)) os='macOS';
+  else if(/Linux/i.test(ua)) os='Linux';
+
+  let browser = 'Другое';
+  if(/EdgA|EdgiOS|Edg\//i.test(ua)) browser='Edge';
+  else if(/OPR\/|Opera|OPiOS/i.test(ua)) browser='Opera';
+  else if(/SamsungBrowser/i.test(ua)) browser='Samsung Internet';
+  else if(/Firefox|FxiOS/i.test(ua)) browser='Firefox';
+  else if(/CriOS/i.test(ua)) browser='Chrome (iOS)';
+  else if(/Chrome\//i.test(ua)) browser='Chrome';
+  else if(/Safari/i.test(ua) && !/Chrome/i.test(ua)) browser='Safari';
+
+  return {device, os, browser};
+}
+
+/* =========================================================
+   QUESTIONS CONFIG  (порядок = порядок вывода на дашборде)
+========================================================= */
+const QUESTIONS = [
+  {id:'q22', target:'demographics', title:'Пол респондентов', emoji:'🧬', type:'single', chart:'donut',
+    options:['Мужской','Женский']},
+  {id:'q23', target:'demographics', title:'Возрастные группы', emoji:'🎂', type:'single', chart:'bar',
+    options:['до 18 лет','18–24 года','25–34 года','35–44 года','45–54 года','55 лет и старше']},
+  {id:'q24', target:'demographics', title:'География (область)', emoji:'🗺️', type:'single', chart:'bar',
+    options:['г. Минск','Минская область','Брестская область','Витебская область','Гомельская область','Гродненская область','Могилёвская область']},
+
+  {id:'q1', target:'default', title:'Летали ли вы когда-нибудь на самолёте?', emoji:'✈️', type:'single', chart:'donut',
+    options:['Да','Нет'], desc:'Первый фильтрующий вопрос анкеты — определяет, увидит ли респондент остальные блоки.'},
+  {id:'q2', target:'default', title:'Пользовались ли вы услугами «Белавиа»?', emoji:'🛫', type:'single', chart:'donut',
+    options:['Да','Нет'], desc:'Задавался только тем, кто хотя бы раз летал на самолёте.'},
+  {id:'q3', target:'default', title:'Сколько раз за 12 месяцев летали (любой авиакомпанией)', emoji:'🔁', type:'number', chart:'hist',
+    desc:'Числовой ответ. Распределение по количеству перелётов за последний год.'},
+  {id:'q4', target:'default', title:'Каким тарифом обычно летаете', emoji:'🎫', type:'single', chart:'bar',
+    options:['Промо','Лайт','Смарт','Флекс','Бизнес']},
+  {id:'q5', target:'default', title:'Комфорт полёта — согласие с утверждениями', emoji:'💺', type:'scaleGroup',
+    subfields:{seats:'Кресла достаточно комфортны', crew:'Стюардессы вежливы и отзывчивы', value:'Соотношение цены и качества устраивает'}},
+  {id:'q6', target:'default', title:'Удовлетворённость бортовым питанием', emoji:'🍱', type:'scale'},
+  {id:'q7', target:'default', title:'Задержки и отмены рейсов', emoji:'⏱️', type:'single', chart:'bar',
+    options:['Рейсы по расписанию','Небольшие задержки (до 1 часа)','Значительные задержки или отмена','Затрудняюсь ответить']},
+  {id:'q8', target:'default', title:'Проблемы с багажом', emoji:'🧳', type:'single', chart:'donut', options:['Да','Нет']},
+  {id:'q9', target:'default', title:'Легко ли найти информацию про ручную кладь/багаж', emoji:'📄', type:'single', chart:'bar'},
+  {id:'q10', target:'default', title:'Подписан(а) на соцсети «Белавиа»', emoji:'📱', type:'single', chart:'donut', options:['Да','Нет']},
+  {id:'q11', target:'default', title:'Насколько информативны соцсети «Белавиа»', emoji:'📰', type:'scale'},
+  {id:'q12', target:'default', title:'Знание про belavia.box (бортовой Wi-Fi)', emoji:'📶', type:'single', chart:'bar'},
+  {id:'q13', target:'default', title:'Насколько понравился контент belavia.box', emoji:'🎬', type:'scale', optional:true},
+  {id:'q14', target:'default', title:'Что улучшить в belavia.box', emoji:'💡', type:'text', optional:true},
+  {id:'q1516', target:'default', title:'Контрольные вопросы о правилах ручной клади', emoji:'🧪', type:'controlPair',
+    desc:'Проверочные вопросы анкеты (повербанк и жидкости 200 мл) — распределение ответов «Да/Нет» без оценки правильности.'},
+  {id:'q17', target:'default', title:'Программа лояльности «Белавиа Лидер»', emoji:'⭐', type:'single', chart:'bar', optional:true},
+  {id:'q18', target:'default', title:'Удобство использования баллов программы лояльности', emoji:'💳', type:'scale', optional:true},
+  {id:'q19', target:'default', title:'Какие улучшения нужны программе лояльности', emoji:'🎯', type:'multi', optional:true},
+  {id:'q20', target:'default', title:'Важность факторов при выборе авиакомпании', emoji:'⚖️', type:'scaleGroup',
+    subfields:{price:'Цена билета', baggage:'Сохранность багажа', comfort:'Комфорт салона', loyalty:'Программа лояльности и бонусы', reviews:'Отзывы и репутация', direct:'Наличие прямых рейсов'}},
+  {id:'q21', target:'default', title:'Что улучшить в «Белавиа» в первую очередь', emoji:'📝', type:'text'},
+];
+
+/* =========================================================
+   STATS HELPERS
+========================================================= */
+function normalizeCategory(val){
+  if(val==null) return null;
+  const s = String(val).trim();
+  if(s==='') return null;
+  if(/^Другое\s*:/i.test(s)) return 'Другое';
+  return s;
+}
+function collectOtherNotes(dataset, qid){
+  const notes=[];
+  dataset.forEach(d=>{
+    const v=d[qid];
+    const vals = Array.isArray(v)? v : [v];
+    vals.forEach(x=>{
+      if(typeof x==='string' && /^Другое\s*:/i.test(x.trim())){
+        const note = x.trim().replace(/^Другое\s*:\s*/i,'');
+        if(note) notes.push(note);
+      }
+    });
+  });
+  return notes;
+}
+// categorical (single-choice)
+function statCategorical(dataset, qid, knownOptions){
+  const counts = {}; let answered=0;
+  dataset.forEach(d=>{
+    if(d[qid]==null) return;
+    const cat = normalizeCategory(d[qid]);
+    if(cat==null) return;
+    counts[cat] = (counts[cat]||0)+1; answered++;
+  });
+  let order = (knownOptions||[]).filter(o=> counts[o]!=null);
+  Object.keys(counts).forEach(k=>{ if(!order.includes(k)) order.push(k); });
+  return { answered, labels: order, values: order.map(k=>counts[k]||0) };
+}
+// multi-select
+function statMulti(dataset, qid){
+  const counts = {}; let respondents=0;
+  dataset.forEach(d=>{
+    const v=d[qid];
+    if(v==null) return;
+    const arr = Array.isArray(v)? v : [v];
+    if(arr.length===0) return;
+    respondents++;
+    arr.forEach(x=>{
+      const cat = normalizeCategory(x);
+      if(cat==null) return;
+      counts[cat]=(counts[cat]||0)+1;
+    });
+  });
+  const labels = Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
+  return { respondents, labels, values: labels.map(l=>counts[l]), counts };
+}
+// numeric
+function statNumber(dataset, qid){
+  const nums=[];
+  dataset.forEach(d=>{ const v=d[qid]; if(typeof v==='number' && !isNaN(v)) nums.push(v); });
+  if(nums.length===0) return {answered:0, avg:0, buckets:[], labels:[]};
+  const avg = nums.reduce((a,b)=>a+b,0)/nums.length;
+  const buckets = {'0':0,'1':0,'2':0,'3':0,'4':0,'5+':0};
+  nums.forEach(n=>{
+    const key = n>=5? '5+' : String(Math.max(0,Math.round(n)));
+    buckets[key] = (buckets[key]||0)+1;
+  });
+  const labels = ['0','1','2','3','4','5+'];
+  return {answered:nums.length, avg, labels, values: labels.map(l=>buckets[l]||0)};
+}
+// single scale (1-5 or "NA")
+function statScale(dataset, qid){
+  const dist={1:0,2:0,3:0,4:0,5:0}; let na=0, sum=0, rated=0, seen=0;
+  dataset.forEach(d=>{
+    const v=d[qid];
+    if(v==null) return;
+    seen++;
+    if(v==='NA' || v==='na'){ na++; return; }
+    const n = typeof v==='number'? v : parseInt(v,10);
+    if(n>=1 && n<=5){ dist[n]=(dist[n]||0)+1; sum+=n; rated++; }
+  });
+  const avg = rated? sum/rated : 0;
+  return {seen, rated, na, avg, dist};
+}
+// scale group (nested object of subfield -> 1-5 as string/number)
+function statScaleGroup(dataset, qid, subfields){
+  const out={};
+  Object.keys(subfields).forEach(sf=>{
+    const dist={1:0,2:0,3:0,4:0,5:0}; let sum=0, rated=0, seen=0, na=0;
+    dataset.forEach(d=>{
+      const obj = d[qid];
+      if(!obj || obj[sf]==null) return;
+      seen++;
+      let raw = obj[sf];
+      if(raw==='NA'||raw==='na'){ na++; return; }
+      const n = typeof raw==='number'? raw : parseInt(raw,10);
+      if(n>=1 && n<=5){ dist[n]=(dist[n]||0)+1; sum+=n; rated++; }
+    });
+    out[sf] = {seen, rated, na, avg: rated? sum/rated:0, dist, label: subfields[sf]};
+  });
+  return out;
+}
+// open text
+function statText(dataset, qid){
+  const items=[];
+  dataset.forEach(d=>{
+    const v=d[qid];
+    if(typeof v==='string' && v.trim()!=='') items.push(v.trim());
+  });
+  return items;
+}
+function pct(part, whole){ return whole? Math.round((part/whole)*1000)/10 : 0; }
+
+/* =========================================================
+   CHART BUILDERS (Chart.js)
+========================================================= */
+function chartColors(n){ const c=[]; for(let i=0;i<n;i++) c.push(PALETTE[i%PALETTE.length]); return c; }
+function hexToRgba(hex, alpha){
+  const h = hex.replace('#','');
+  const r=parseInt(h.substring(0,2),16), g=parseInt(h.substring(2,4),16), b=parseInt(h.substring(4,6),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+function isHoloTheme(){ return document.body.classList.contains('theme-holo'); }
+const ALL_CHARTS = [];
+// голографический режим: заливка — прозрачная версия того же цвета, обводка — насыщенный цвет (как контур голограммы)
+function styleSegmentedChart(chart, kind){
+  const cols = chart._baseColors; if(!cols || !chart.data.datasets[0]) return;
+  const ds = chart.data.datasets[0];
+  const holo = isHoloTheme();
+  if(kind==='donut'){
+    ds.backgroundColor = holo? cols.map(c=>hexToRgba(c,0.14)) : cols;
+    ds.borderColor = holo? cols : '#05060d';
+    ds.borderWidth = 2;
+    if(holo) ds.hoverBackgroundColor = cols.map(c=>hexToRgba(c,0.34)); else delete ds.hoverBackgroundColor;
+  } else if(kind==='bar'){
+    ds.backgroundColor = holo? cols.map(c=>hexToRgba(c,0.16)) : cols;
+    ds.borderColor = holo? cols : 'transparent';
+    ds.borderWidth = holo? 2 : 0;
+    if(holo) ds.hoverBackgroundColor = cols.map(c=>hexToRgba(c,0.34)); else delete ds.hoverBackgroundColor;
+  } else if(kind==='polar'){
+    ds.backgroundColor = holo? cols.map(c=>hexToRgba(c,0.20)) : cols.map(c=>c+'cc');
+    ds.borderColor = holo? cols : '#05060d';
+    ds.borderWidth = holo? 2 : 1.5;
+  }
+}
+function registerSegmentedChart(chart, baseColors, kind){
+  chart._baseColors = baseColors; chart._kind = kind;
+  styleSegmentedChart(chart, kind);
+  chart.update('none');
+  ALL_CHARTS.push(chart);
+  return chart;
+}
+function refreshChartThemes(){
+  ALL_CHARTS.forEach(c=>{ try{ styleSegmentedChart(c, c._kind); c.update('none'); }catch(e){} });
+}
+
+function makeDonut(canvas, labels, values){
+  const shortLabels = labels.map(l=>truncateLabel(l,20));
+  const total = values.reduce((a,b)=>a+b,0);
+  const baseColors = chartColors(labels.length);
+  const chart = new Chart(canvas, {
+    type:'doughnut',
+    data:{ labels: shortLabels, datasets:[{ data: values, backgroundColor: baseColors, borderColor:'#05060d', borderWidth:2, hoverOffset:9 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false, layout:{padding:10},
+      plugins:{
+        legend:{ position:'bottom', labels:{ boxWidth:10, padding:12, font:{size:11} } },
+        tooltip:{ callbacks:{
+          title:(items)=> labels[items[0].dataIndex],
+          label:(ctx)=> `${ctx.raw} (${pct(ctx.raw,total)}%)`
+        } },
+        datalabels:{
+          color:(ctx)=> isHoloTheme()? '#eaf4ff' : '#040713',
+          textStrokeColor:(ctx)=> isHoloTheme()? 'rgba(2,4,10,.85)' : 'rgba(255,255,255,.5)',
+          textStrokeWidth:2.5,
+          font:{family:"'Share Tech Mono', monospace", weight:'bold', size:11},
+          formatter:(v)=> total? pct(v,total)+'%' : '',
+          display:(ctx)=> (ctx.dataset.data[ctx.dataIndex]/total) > 0.045
+        }
+      },
+      cutout:'62%'
+    }
+  });
+  return registerSegmentedChart(chart, baseColors, 'donut');
+}
+function makeBar(canvas, labels, values, horizontal){
+  const shortLabels = labels.map(l=>truncateLabel(l, horizontal?26:14));
+  const total = values.reduce((a,b)=>a+b,0);
+  const baseColors = chartColors(labels.length);
+  const chart = new Chart(canvas, {
+    type:'bar',
+    data:{ labels: shortLabels, datasets:[{ data: values, backgroundColor: baseColors, borderRadius:5, maxBarThickness:46 }] },
+    options:{
+      indexAxis: horizontal? 'y':'x',
+      responsive:true, maintainAspectRatio:false,
+      layout:{ padding: horizontal? {right:38} : {top:26} },
+      plugins:{
+        legend:{display:false},
+        tooltip:{ callbacks:{
+          title:(items)=> labels[items[0].dataIndex],
+          label:(ctx)=> `${ctx.raw} (${pct(ctx.raw,total)}%)`
+        } },
+        datalabels:{
+          color:'#dbe6ff', font:{family:"'Share Tech Mono', monospace", size:10},
+          anchor:'end', align: horizontal? 'end':'end',
+          offset:2,
+          formatter:(v)=> v? `${v} (${pct(v,total)}%)` : ''
+        }
+      },
+      scales:{
+        x:{ grid:{color:'rgba(120,150,255,.08)'}, ticks:{font:{size:10}, autoSkip:false, maxRotation: horizontal?0:38, minRotation:0} },
+        y:{ grid:{color:'rgba(120,150,255,.08)'}, ticks:{font:{size:10}} }
+      }
+    }
+  });
+  return registerSegmentedChart(chart, baseColors, 'bar');
+}
+function makeLine(canvas, labels, values, label){
+  return new Chart(canvas, {
+    type:'line',
+    data:{ labels, datasets:[{ label, data: values, borderColor:'#00e5ff', backgroundColor:'rgba(0,229,255,.12)',
+      fill:true, tension:.35, pointRadius:2, pointBackgroundColor:'#f4e04d' }] },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false}, datalabels:{display:false} },
+      scales:{ x:{grid:{color:'rgba(120,150,255,.08)'}, ticks:{font:{size:9}, maxRotation:0}}, y:{grid:{color:'rgba(120,150,255,.08)'}, beginAtZero:true} } }
+  });
+}
+function makeRadar(canvas, labels, values, maxV){
+  const shortLabels = labels.map(l=>truncateLabel(l,16));
+  const chart = new Chart(canvas, {
+    type:'radar',
+    data:{ labels: shortLabels, datasets:[{
+      label:'среднее', data: values,
+      borderColor:'#00e5ff', backgroundColor: isHoloTheme()? 'rgba(0,229,255,.10)' : 'rgba(0,229,255,.18)',
+      borderWidth: isHoloTheme()? 2.5 : 2,
+      pointBackgroundColor:'#f4e04d', pointBorderColor:'#f4e04d', pointRadius:3
+    }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{display:false},
+        tooltip:{ callbacks:{ title:(items)=> labels[items[0].dataIndex], label:(ctx)=> `${ctx.raw.toFixed ? ctx.raw.toFixed(2) : ctx.raw} / ${maxV||5}` } },
+        datalabels:{ color:'#f4e04d', font:{family:"'Share Tech Mono', monospace", size:10, weight:'bold'},
+          formatter:(v)=> v.toFixed(1), align:'end', offset:6 }
+      },
+      scales:{ r:{ min:0, max:maxV||5,
+        grid:{color:'rgba(120,150,255,.15)'}, angleLines:{color:'rgba(120,150,255,.15)'},
+        pointLabels:{font:{size:10}, color:'#9fb0e0'}, ticks:{display:false, stepSize:1} } }
+    }
+  });
+  chart._kind='radar';
+  ALL_CHARTS.push(chart);
+  return chart;
+}
+function makePolarArea(canvas, labels, values){
+  const shortLabels = labels.map(l=>truncateLabel(l,18));
+  const total = values.reduce((a,b)=>a+b,0);
+  const baseColors = chartColors(labels.length);
+  const chart = new Chart(canvas, {
+    type:'polarArea',
+    data:{ labels: shortLabels, datasets:[{ data: values, backgroundColor: baseColors.map(c=>c+'cc'), borderColor:'#05060d', borderWidth:1.5 }]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{
+        legend:{ position:'bottom', labels:{ boxWidth:10, padding:10, font:{size:10.5} } },
+        tooltip:{ callbacks:{ title:(items)=> labels[items[0].dataIndex], label:(ctx)=> `${ctx.raw} (${pct(ctx.raw,total)}%)` } },
+        datalabels:{ color:(ctx)=> isHoloTheme()? '#eaf4ff' : '#040713',
+          textStrokeColor:(ctx)=> isHoloTheme()? 'rgba(2,4,10,.85)' : 'rgba(255,255,255,.5)',
+          textStrokeWidth:2.5,
+          font:{family:"'Share Tech Mono', monospace", weight:'bold', size:10},
+          formatter:(v)=> v? `${v}` : '', display:(ctx)=> (ctx.dataset.data[ctx.dataIndex]/Math.max(1,...ctx.dataset.data)) > 0.2 }
+      },
+      scales:{ r:{ grid:{color:'rgba(120,150,255,.12)'}, ticks:{display:false} } }
+    }
+  });
+  return registerSegmentedChart(chart, baseColors, 'polar');
+}
+
+/* =========================================================
+   HTML COMPONENT BUILDERS
+========================================================= */
+function elStatBig(value, label, colorClass){
+  const str = String(value);
+  const m = str.match(/^(-?[\d.]+)(.*)$/);
+  const num = m? m[1] : str;
+  const suffix = m? m[2] : '';
+  return `<div class="stat-big"><div class="num ${colorClass||''}" data-count="${num}" data-suffix="${escapeHtml(suffix)}">0</div><div class="lbl">${label}</div></div>`;
+}
+function elScaleCard(name, s){
+  const total = s.rated + s.na;
+  const avgRounded = Math.max(1, Math.min(5, Math.round(s.avg)||1));
+  const face = s.rated? FACE[avgRounded] : '—';
+  // высота столбика = честный % от числа ОТВЕТИВШИХ (не относительно самого популярного варианта!),
+  // иначе редкий, но самый частый вариант визуально выглядит как "больше половины", хотя это не так.
+  const distHtml = [1,2,3,4,5].map(k=>{
+    const v=s.dist[k]||0;
+    const sharePct = s.rated? Math.round((v/s.rated)*100) : 0;
+    const h = Math.max(v>0?3:0, sharePct);
+    return `<i style="height:${h}%"><span class="cnt">${v} чел.<br>${sharePct}%</span><span class="val">${k} ${FACE[k]}</span></i>`;
+  }).join('');
+  const lowSample = s.rated>0 && s.rated<5;
+  const noSample = s.rated===0 && total>0;
+  return `
+  <div class="scale-card${lowSample||noSample?' low-sample':''}">
+    <div class="scale-top">
+      <div class="name">${name}</div>
+      <div class="avg"><span class="face">${face}</span> ${s.rated? s.avg.toFixed(2):'—'} / 5 <span style="font-size:11px;color:var(--text-dim);font-family:var(--mono);">(${s.rated? Math.round(s.avg/5*100):0}%)</span></div>
+    </div>
+    <div class="scale-bar-track"><div class="scale-bar-fill" style="width:${s.rated? (s.avg/5*100):0}%"></div></div>
+    <div class="scale-meta"><span>1 😖 &nbsp;→&nbsp; 5 🤩</span><span>оценили: ${s.rated} ${s.na? ' · N/A: '+s.na : ''} ${total? ' · видели вопрос: '+total : ''}</span></div>
+    ${lowSample? `<div class="sample-warn">⚠ мало реальных оценок (n=${s.rated} из ${total} видевших вопрос) — среднему тут доверять не стоит, показано для полноты картины</div>` : ''}
+    ${noSample? `<div class="sample-warn">⚠ вопрос видели ${total} чел., но все отметили «не пользуюсь / N/A» — оценить нечем</div>` : ''}
+    ${s.rated>0? `
+    <div class="scale-dist-wrap">
+      <div class="scale-dist">${distHtml}</div>
+      <div class="scale-dist-caption">📊 доля ответивших (${s.rated} чел.), выбравших каждый балл от 1 до 5</div>
+    </div>` : ''}
+  </div>`;
+}
+function elTextList(items, title){
+  if(items.length===0) return `<p class="empty-note">Открытых ответов по этому вопросу нет.</p>`;
+  const shortN = Math.min(5, items.length);
+  const shortHtml = items.slice(0,shortN).map(t=>`<div class="text-item">${escapeHtml(t)}</div>`).join('');
+  const restHtml = items.slice(shortN).map(t=>`<div class="text-item">${escapeHtml(t)}</div>`).join('');
+  const uid = 'txt_'+Math.random().toString(36).slice(2,9);
+  const moreLabel = `▼ показать ещё ${items.length-shortN} ответов`;
+  return `
+  <div class="text-list" id="${uid}_short">${shortHtml}</div>
+  ${items.length>shortN? `
+  <div class="text-list hidden" id="${uid}_rest">${restHtml}</div>
+  <button class="toggle-btn" data-target="${uid}_rest" data-more="${escapeHtml(moreLabel)}" data-less="▲ скрыть ответы">${moreLabel}</button>
+  ` : ''}
+  <div class="scale-meta" style="margin-top:10px;"><span>Всего заполненных ответов: ${items.length}</span></div>
+  `;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function bindToggles(root){
+  root.querySelectorAll('.toggle-btn').forEach(btn=>{
+    if(btn._bound) return; btn._bound = true;
+    btn.addEventListener('click', ()=>{
+      const t = document.getElementById(btn.dataset.target);
+      const willShow = t.classList.contains('hidden');
+      t.classList.toggle('hidden');
+      btn.textContent = willShow? btn.dataset.less : btn.dataset.more;
+    });
+  });
+}
+
+/* =========================================================
+   SECTION RENDERERS
+========================================================= */
+function renderHeroNumbers(all, verified){
+  const root = document.getElementById('hero-numbers');
+  const avgDurationSec = verified.length? Math.round(verified.reduce((a,d)=>a+(d._meta_durationMs||0),0)/verified.length/1000) : 0;
+  const flewYes = verified.filter(d=>d.q1==='Да').length;
+  const usedBelavia = verified.filter(d=>d.q2==='Да').length;
+  root.innerHTML = [
+    elStatBig(all.length, '📥 всего анкет получено', ''),
+    elStatBig(verified.length, '✅ прошли проверку подлинности', 'yellow'),
+    elStatBig(all.length-verified.length, '🚫 отсеяно как подозрительные/дубли', 'purple'),
+    elStatBig(flewYes, '✈️ когда-либо летали', ''),
+    elStatBig(usedBelavia, '🛫 летали именно «Белавиа»', 'yellow'),
+    elStatBig(avgDurationSec, '⏳ сред. время заполнения, сек', 'purple'),
+  ].join('');
+  animateCounters(root);
+
+  // динамика прохождения опроса по дням
+  const timelinePanel = document.getElementById('hero-timeline-panel');
+  const byDay = {};
+  verified.forEach(d=>{
+    const ts = d._meta_submittedAt;
+    if(!ts) return;
+    const day = String(ts).slice(0,10);
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+    byDay[day] = (byDay[day]||0)+1;
+  });
+  const days = Object.keys(byDay).sort();
+  if(days.length>=2){
+    const uid='hero_timeline_chart';
+    timelinePanel.innerHTML = `<div class="section-desc" style="margin-top:-4px;">📈 динамика прохождения опроса по дням</div>
+      <div class="chart-box small"><canvas id="${uid}"></canvas></div>`;
+    requestAnimationFrame(()=> makeLine(document.getElementById(uid), days, days.map(d=>byDay[d]), 'анкет в день'));
+  } else {
+    timelinePanel.innerHTML='';
+  }
+}
+
+function renderDemographics(dataset){
+  const root = document.getElementById('demographics-grid');
+  root.innerHTML='';
+  QUESTIONS.filter(q=>q.target==='demographics').forEach(q=>{
+    const s = statCategorical(dataset, q.id, q.options);
+    const uid = 'chart_'+q.id;
+    const box = document.createElement('div');
+    box.className='panel';
+    box.innerHTML = `<div class="section-desc" style="margin-top:-4px;">${q.emoji} ${q.title}</div>
+      <div class="chart-box small"><canvas id="${uid}"></canvas></div>
+      <div class="scale-meta"><span>ответили: ${s.answered}</span></div>`;
+    root.appendChild(box);
+    requestAnimationFrame(()=>{
+      const canvas = document.getElementById(uid);
+      if(q.chart==='donut') makeDonut(canvas, s.labels, s.values);
+      else makeBar(canvas, s.labels, s.values, true);
+    });
+  });
+}
+
+function renderDeviceStats(verified){
+  const root = document.getElementById('device-grid');
+  root.innerHTML='';
+  const devices={}, oses={}, browsers={};
+  verified.forEach(d=>{
+    const {device, os, browser} = parseUA(d._meta_ua);
+    devices[device]=(devices[device]||0)+1;
+    oses[os]=(oses[os]||0)+1;
+    browsers[browser]=(browsers[browser]||0)+1;
+  });
+  function panelFor(titleTxt, obj, chartType){
+    const labels = Object.keys(obj).sort((a,b)=>obj[b]-obj[a]);
+    const values = labels.map(l=>obj[l]);
+    const uid='chart_'+Math.random().toString(36).slice(2,8);
+    const div=document.createElement('div');
+    div.className='panel';
+    div.innerHTML = `<div class="section-desc" style="margin-top:-4px;">${titleTxt}</div><div class="chart-box small"><canvas id="${uid}"></canvas></div>`;
+    root.appendChild(div);
+    requestAnimationFrame(()=>{
+      const canvas=document.getElementById(uid);
+      if(chartType==='donut') makeDonut(canvas, labels, values); else makeBar(canvas, labels, values, true);
+    });
+  }
+  panelFor('📟 Тип устройства', devices, 'donut');
+  panelFor('🧭 Операционная система', oses, 'bar');
+  panelFor('🌐 Браузер', browsers, 'bar');
+}
+
+function sectionShell(idx, q){
+  const s = document.createElement('section');
+  s.className='section';
+  s.id = 'sec-'+q.id;
+  s.innerHTML = `
+    <div class="section-head"><span class="idx">// ${idx}</span><h2><span class="emo">${q.emoji}</span>${q.title}</h2><span class="line"></span></div>
+    ${q.desc? `<p class="section-desc">${q.desc}</p>` : ''}
+    <div class="panel" id="body-${q.id}"></div>
+  `;
+  return s;
+}
+
+function renderQuestionSection(q, dataset, idx){
+  const root = document.getElementById('questions-root');
+  const sec = sectionShell(idx, q);
+  root.appendChild(sec);
+  const body = sec.querySelector(`#body-${q.id}`);
+
+  if(q.type==='single'){
+    const s = statCategorical(dataset, q.id, q.options);
+    if(s.answered===0){ body.innerHTML='<p class="empty-note">Нет данных по этому вопросу.</p>'; return; }
+    const uid='c_'+q.id;
+    body.innerHTML = `<div class="chart-box"><canvas id="${uid}"></canvas></div><div class="scale-meta"><span>ответили: ${s.answered}</span></div>`;
+    requestAnimationFrame(()=>{
+      const canvas=document.getElementById(uid);
+      if(q.chart==='donut') makeDonut(canvas, s.labels, s.values); else makeBar(canvas, s.labels, s.values, s.labels.length>4);
+    });
+  }
+  else if(q.type==='multi'){
+    const s = statMulti(dataset, q.id);
+    if(s.respondents===0){ body.innerHTML='<p class="empty-note">Нет данных по этому вопросу.</p>'; return; }
+    const uid='c_'+q.id;
+    body.innerHTML = `<div class="chart-box"><canvas id="${uid}"></canvas></div>
+      <div class="scale-meta"><span>ответили (можно было выбрать несколько вариантов): ${s.respondents}</span></div>`;
+    requestAnimationFrame(()=> makePolarArea(document.getElementById(uid), s.labels, s.values));
+  }
+  else if(q.type==='number'){
+    const s = statNumber(dataset, q.id);
+    if(s.answered===0){ body.innerHTML='<p class="empty-note">Нет данных по этому вопросу.</p>'; return; }
+    const uid='c_'+q.id;
+    body.innerHTML = `
+      <div class="grid2">
+        <div>${elStatBig(s.avg.toFixed(1), '✈️ среднее число перелётов в год', 'yellow')}</div>
+        <div class="chart-box small"><canvas id="${uid}"></canvas></div>
+      </div>
+      <div class="scale-meta"><span>ответили: ${s.answered}</span></div>`;
+    requestAnimationFrame(()=>{ makeBar(document.getElementById(uid), s.labels, s.values, false); animateCounters(body); });
+  }
+  else if(q.type==='scale'){
+    const s = statScale(dataset, q.id);
+    if(s.seen===0){ body.innerHTML='<p class="empty-note">Нет данных по этому вопросу.</p>'; return; }
+    body.innerHTML = elScaleCard(q.title, s);
+  }
+  else if(q.type==='scaleGroup'){
+    const groups = statScaleGroup(dataset, q.id, q.subfields);
+    const keys = Object.keys(groups);
+    const anySeen = keys.some(k=>groups[k].seen>0);
+    if(!anySeen){ body.innerHTML='<p class="empty-note">Нет данных по этому вопросу.</p>'; return; }
+    const radarKeys = keys.filter(k=>groups[k].rated>0);
+    const uidRadar = 'radar_'+q.id;
+    body.innerHTML = (radarKeys.length>=3? `
+      <div class="chart-box small" style="margin-bottom:20px;"><canvas id="${uidRadar}"></canvas></div>
+      <div class="scale-dist-caption" style="margin:-8px 0 18px;">🕸️ общий профиль — все параметры на одной диаграмме</div>
+    ` : '') + keys.map(k=> elScaleCard(groups[k].label, groups[k])).join('');
+    if(radarKeys.length>=3){
+      requestAnimationFrame(()=> makeRadar(document.getElementById(uidRadar), radarKeys.map(k=>groups[k].label), radarKeys.map(k=>groups[k].avg), 5));
+    }
+  }
+  else if(q.type==='text'){
+    const items = statText(dataset, q.id);
+    body.innerHTML = `<div id="textwrap-${q.id}">${elTextList(items)}</div>`;
+    bindToggles(body);
+  }
+  else if(q.type==='controlPair'){
+    const s15 = statCategorical(dataset,'q15',['Да','Нет']);
+    const s16 = statCategorical(dataset,'q16',['Да','Нет']);
+    function miniBar(labels, values){
+      const max=Math.max(1,...values);
+      return labels.map((l,i)=>`<div style="display:flex;align-items:center;gap:8px;margin:4px 0;font-size:11.5px;">
+        <span style="width:44px;color:var(--text-dim);">${l}</span>
+        <div style="flex:1;background:rgba(255,255,255,.06);border-radius:4px;overflow:hidden;height:10px;">
+          <div style="width:${(values[i]/max*100)}%;height:100%;background:linear-gradient(90deg,var(--cyan),var(--purple));"></div>
+        </div><span style="width:34px;text-align:right;color:var(--yellow);">${values[i]}</span></div>`).join('');
+    }
+    body.innerHTML = `<div class="control-grid">
+      <div class="control-item"><div class="q">🔋 Повербанк можно перевозить в ручной клади?</div>${miniBar(s15.labels,s15.values)}
+        <div class="scale-meta"><span>ответили: ${s15.answered}</span></div></div>
+      <div class="control-item"><div class="q">💧 Жидкость 200 мл можно провозить в ручной клади?</div>${miniBar(s16.labels,s16.values)}
+        <div class="scale-meta"><span>ответили: ${s16.answered}</span></div></div>
+    </div>`;
+  }
+}
+
+function animateCounters(root){
+  root.querySelectorAll('[data-count]').forEach(el=>{
+    const raw = el.getAttribute('data-count');
+    const suffix = el.getAttribute('data-suffix') || '';
+    const target = parseFloat(raw);
+    if(isNaN(target)){ el.textContent = raw + suffix; return; }
+    const isFloat = String(target).includes('.');
+    const dur=900; const start=performance.now();
+    function step(now){
+      const p=Math.min(1,(now-start)/dur);
+      const eased = 1-Math.pow(1-p,3);
+      const val = target*eased;
+      el.textContent = (isFloat? val.toFixed(1) : Math.round(val).toLocaleString('ru-RU')) + suffix;
+      if(p<1) requestAnimationFrame(step);
+      else el.textContent = (isFloat? target.toFixed(1) : Math.round(target).toLocaleString('ru-RU')) + suffix;
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+/* =========================================================
+   SEARCH / FILTER TOOL
+========================================================= */
+const SEARCH_FIELDS = [
+  {key:'_device', label:'📟 Тип устройства'},
+  {key:'_os', label:'🧭 Операционная система'},
+  {key:'q22', label:'🧬 Пол'},
+  {key:'q23', label:'🎂 Возраст'},
+  {key:'q24', label:'🗺️ Область'},
+  {key:'q1', label:'✈️ Летали когда-либо'},
+  {key:'q2', label:'🛫 Летали «Белавиа»'},
+];
+
+function buildSearchFilters(verified){
+  const root = document.getElementById('search-filters');
+  root.innerHTML='';
+  SEARCH_FIELDS.forEach(f=>{
+    const values = new Set();
+    verified.forEach(d=>{
+      let v;
+      if(f.key==='_device') v = parseUA(d._meta_ua).device;
+      else if(f.key==='_os') v = parseUA(d._meta_ua).os;
+      else v = normalizeCategory(d[f.key]);
+      if(v!=null) values.add(v);
+    });
+    const opts = ['Все'].concat(Array.from(values).sort());
+    const uid = 'filter_'+f.key;
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<span class="field-label">${f.label}</span>
+      <select class="cyber-select" id="${uid}" data-key="${f.key}">
+        ${opts.map(o=>`<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`).join('')}
+      </select>`;
+    root.appendChild(wrap);
+  });
+}
+
+function runSearch(verified){
+  const selects = Array.from(document.querySelectorAll('#search-filters select'));
+  const criteria = selects.map(s=>({key:s.dataset.key, val:s.value})).filter(c=>c.val!=='Все');
+  const subset = verified.filter(d=>{
+    return criteria.every(c=>{
+      let v;
+      if(c.key==='_device') v = parseUA(d._meta_ua).device;
+      else if(c.key==='_os') v = parseUA(d._meta_ua).os;
+      else v = normalizeCategory(d[c.key]);
+      return v === c.val;
+    });
+  });
+  renderSearchResult(subset, verified.length);
+}
+
+function renderSearchResult(subset, totalVerified){
+  const root = document.getElementById('search-result');
+  if(subset.length===0){
+    root.innerHTML = `<div class="result-empty">⚠ по заданным критериям респонденты не найдены. Попробуйте ослабить условия.</div>`;
+    return;
+  }
+  const rows = [];
+  QUESTIONS.forEach(q=>{
+    if(q.id==='q1516') return;
+    if(q.type==='single'){
+      const s = statCategorical(subset, q.id, q.options);
+      if(s.answered===0) return;
+      const top = s.labels[0]; const topVal = s.values[0];
+      rows.push([`${q.emoji} ${q.title}`, `${top} — ${topVal} (${pct(topVal,s.answered)}%)`]);
+    } else if(q.type==='multi'){
+      const s = statMulti(subset, q.id);
+      if(s.respondents===0) return;
+      rows.push([`${q.emoji} ${q.title}`, s.labels.length? `${s.labels[0]} чаще всего (${s.counts[s.labels[0]]})` : '—']);
+    } else if(q.type==='number'){
+      const s = statNumber(subset, q.id);
+      if(s.answered===0) return;
+      rows.push([`${q.emoji} ${q.title}`, `в среднем ${s.avg.toFixed(1)} раз/год`]);
+    } else if(q.type==='scale'){
+      const s = statScale(subset, q.id);
+      if(s.rated===0) return;
+      rows.push([`${q.emoji} ${q.title}`, `${s.avg.toFixed(2)} / 5 ${FACE[Math.round(s.avg)]||''}`]);
+    } else if(q.type==='scaleGroup'){
+      const groups = statScaleGroup(subset, q.id, q.subfields);
+      Object.values(groups).forEach(g=>{ if(g.rated>0) rows.push([`${q.emoji} ${g.label}`, `${g.avg.toFixed(2)} / 5`]); });
+    } else if(q.type==='text'){
+      const items = statText(subset, q.id);
+      rows.push([`${q.emoji} ${q.title}`, `${items.length} текстовых ответов`]);
+    }
+  });
+
+  root.innerHTML = `
+    <div class="grid2" style="margin-bottom:6px;">
+      ${elStatBig(subset.length, '👤 подходит под критерии', 'yellow')}
+      ${elStatBig(pct(subset.length, totalVerified)+'%', '📊 доля от всех проверенных анкет', 'purple')}
+    </div>
+    <table class="result-table">
+      <thead><tr><th>Показатель</th><th>Значение по сегменту</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr><td>${r[0]}</td><td class="num">${r[1]}</td></tr>`).join('')}</tbody>
+    </table>
+  `;
+  animateCounters(root);
+}
+
+/* =========================================================
+   BACKGROUND FX: matrix rain / storm rain / particles / skyline
+========================================================= */
+const MATRIX_CHARS = 'アイウエオカキクケコサシスセソ01ABCDEFXYZЖШЩЭЮЯ$#%&*'.split('');
+let matrixCtx, matrixCols=[], matrixCanvas, rainCtx, rainCanvas;
+
+function sizeCanvas(cv){ cv.width = window.innerWidth; cv.height = window.innerHeight; }
+
+function initMatrix(){
+  matrixCanvas = document.getElementById('matrix-canvas');
+  matrixCtx = matrixCanvas.getContext('2d');
+  sizeCanvas(matrixCanvas);
+  const fontSize=16;
+  const cols = Math.floor(matrixCanvas.width/fontSize);
+  matrixCols = new Array(cols).fill(0).map(()=> Math.random()*-40);
+  function draw(){
+    const breach = document.body.classList.contains('egg-breach');
+    matrixCtx.fillStyle = breach? 'rgba(20,2,4,0.16)' : 'rgba(2,3,10,0.14)';
+    matrixCtx.fillRect(0,0,matrixCanvas.width,matrixCanvas.height);
+    matrixCtx.font = fontSize+'px monospace';
+    for(let i=0;i<matrixCols.length;i++){
+      const ch = MATRIX_CHARS[Math.floor(Math.random()*MATRIX_CHARS.length)];
+      const roll = Math.random();
+      if(breach){
+        matrixCtx.fillStyle = roll<0.12? '#ffffff' : (roll<0.4? '#ff2d4d' : '#a80018');
+      } else {
+        matrixCtx.fillStyle = roll<0.05? '#f4e04d' : (roll<0.1? '#b34bff' : '#00e5ff');
+      }
+      matrixCtx.fillText(ch, i*fontSize, matrixCols[i]*fontSize);
+      if(matrixCols[i]*fontSize > matrixCanvas.height && Math.random()>0.975) matrixCols[i]=0;
+      matrixCols[i]++;
+    }
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+function initRain(){
+  rainCanvas = document.getElementById('rain-canvas');
+  rainCtx = rainCanvas.getContext('2d');
+  sizeCanvas(rainCanvas);
+  let drops = new Array(220).fill(0).map(()=>({
+    x:Math.random()*rainCanvas.width, y:Math.random()*rainCanvas.height,
+    len: 16+Math.random()*22, speed: 9+Math.random()*11
+  }));
+  function draw(){
+    rainCtx.clearRect(0,0,rainCanvas.width,rainCanvas.height);
+    rainCtx.strokeStyle='rgba(150,180,220,.45)'; rainCtx.lineWidth=1;
+    drops.forEach(d=>{
+      rainCtx.beginPath();
+      rainCtx.moveTo(d.x,d.y);
+      rainCtx.lineTo(d.x-5,d.y+d.len);
+      rainCtx.stroke();
+      d.y += d.speed; d.x -= 1.3;
+      if(d.y>rainCanvas.height){ d.y=-20; d.x=Math.random()*rainCanvas.width; }
+    });
+    requestAnimationFrame(draw);
+  }
+  draw();
+}
+
+function initFog(){
+  const wrap = document.getElementById('fog-layer');
+  const n=6;
+  for(let i=0;i<n;i++){
+    const p=document.createElement('div');
+    p.className='puff';
+    const size = 260+Math.random()*260;
+    p.style.width=size+'px'; p.style.height=size+'px';
+    p.style.left=(Math.random()*100)+'%';
+    p.style.top=(30+Math.random()*60)+'%';
+    p.style.animationDuration=(30+Math.random()*30)+'s';
+    p.style.animationDelay=(-Math.random()*30)+'s';
+    wrap.appendChild(p);
+  }
+}
+
+/* ---------- weather mode toggle: 🌐 матрица  ↔  🌧 ливень ---------- */
+let weatherMode = 'matrix';
+function setWeatherMode(mode){
+  weatherMode = mode;
+  document.body.classList.toggle('weather-rain', mode==='rain');
+  const label = document.getElementById('weather-toggle-label');
+  const ic = document.querySelector('#weather-toggle .ic');
+  if(mode==='rain'){ label.textContent='РЕЖИМ: ЛИВЕНЬ'; ic.textContent='🌧'; }
+  else { label.textContent='РЕЖИМ: МАТРИЦА'; ic.textContent='👾'; }
+}
+function initWeatherToggle(){
+  document.getElementById('weather-toggle').addEventListener('click', ()=>{
+    setWeatherMode(weatherMode==='matrix' ? 'rain' : 'matrix');
+  });
+}
+
+/* ---------- panel theme toggle: стандарт ↔ голограмма ---------- */
+function initBackToTop(){
+  const btn = document.getElementById('back-to-top');
+  window.addEventListener('scroll', ()=>{
+    btn.classList.toggle('visible', window.scrollY > 500);
+  }, {passive:true});
+  btn.addEventListener('click', ()=>{ if(topHoldFired){ topHoldFired=false; return; } window.scrollTo({top:0, behavior:'smooth'}); });
+}
+
+function initThemeToggle(){
+  const btn = document.getElementById('theme-toggle');
+  const label = document.getElementById('theme-toggle-label');
+  const ic = btn.querySelector('.ic');
+  btn.addEventListener('click', ()=>{
+    const on = document.body.classList.toggle('theme-holo');
+    label.textContent = on? 'ТЕМА: ГОЛОГРАММА' : 'ТЕМА: СТАНДАРТ';
+    ic.textContent = on? '🔮' : '⬜';
+    refreshChartThemes();
+  });
+}
+
+function initParticles(){
+  const wrap = document.getElementById('particles');
+  const colors=['','yellow','purple'];
+  function spawn(){
+    const m = document.createElement('div');
+    const size = 2+Math.random()*3;
+    m.className = 'mote '+colors[Math.floor(Math.random()*colors.length)];
+    m.style.left = Math.random()*100+'vw';
+    m.style.width = size+'px'; m.style.height=size+'px';
+    const dur = 9+Math.random()*10;
+    m.style.animationDuration = dur+'s';
+    wrap.appendChild(m);
+    setTimeout(()=>m.remove(), dur*1000+200);
+  }
+  for(let i=0;i<18;i++) setTimeout(spawn, i*300);
+  setInterval(spawn, 900);
+}
+
+function initSkyline(){
+  const root = document.getElementById('skyline');
+  root.innerHTML='';
+  const n = Math.max(16, Math.floor(window.innerWidth/40));
+  for(let i=0;i<n;i++){
+    const b = document.createElement('div');
+    const isMega = Math.random()>0.92;
+    b.className='b'+(Math.random()>.85?' purple-glow':'');
+    const h = isMega? (320+Math.random()*160) : (36+Math.random()*230);
+    const w = isMega? (34+Math.random()*18) : (22+Math.random()*38);
+    b.style.height=h+'px'; b.style.width=w+'px';
+    const winCount = Math.floor(h/15);
+    for(let j=0;j<winCount;j++){
+      if(Math.random()>0.62){
+        const win=document.createElement('i');
+        win.style.left = (4+Math.random()*(w-10))+'px';
+        win.style.bottom = (6+j*15)+'px';
+        b.appendChild(win);
+      }
+    }
+    // silhouette variety: spire, stepped tier, or flat roof
+    const roofType = Math.random();
+    if(isMega){
+      const spire=document.createElement('div');
+      spire.className='spire';
+      spire.style.height=(30+Math.random()*40)+'px';
+      b.appendChild(spire);
+      const beacon=document.createElement('div');
+      beacon.className='beacon';
+      beacon.style.bottom = spire.style.height;
+      beacon.style.animationDelay = (Math.random()*2)+'s';
+      b.appendChild(beacon);
+    } else if(roofType>0.7){
+      const tier=document.createElement('div');
+      tier.style.position='absolute'; tier.style.left='20%'; tier.style.bottom='100%';
+      tier.style.width='60%'; tier.style.height=(14+Math.random()*22)+'px';
+      tier.style.background='linear-gradient(180deg,#060812,#020306 75%)';
+      tier.style.borderTop='1px solid rgba(120,150,255,.14)';
+      b.appendChild(tier);
+    } else if(roofType>0.5){
+      const spire=document.createElement('div');
+      spire.className='spire';
+      spire.style.height=(12+Math.random()*22)+'px';
+      b.appendChild(spire);
+    }
+    root.appendChild(b);
+  }
+}
+
+window.addEventListener('resize', ()=>{
+  if(matrixCanvas) sizeCanvas(matrixCanvas);
+  if(rainCanvas) sizeCanvas(rainCanvas);
+  initSkyline();
+  if(typeof initEggTowerBeacon === 'function') initEggTowerBeacon();
+});
+
+/* =========================================================
+   TERMINAL / BOOT SEQUENCE
+========================================================= */
+const termBody = ()=> document.getElementById('terminal-text');
+function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+async function typeLine(text, cls){
+  const body = termBody();
+  const ln = document.createElement('div');
+  ln.className = 'ln'+(cls?(' '+cls):'');
+  body.appendChild(ln);
+  for(let i=0;i<text.length;i++){
+    ln.textContent = text.slice(0,i+1);
+    if(i%3===0) body.scrollTop = body.scrollHeight;
+    await sleep(6);
+  }
+  body.scrollTop = body.scrollHeight;
+  return ln;
+}
+function setProgress(pct_){ document.getElementById('progress-fill').style.width = Math.max(0,Math.min(100,pct_))+'%'; }
+function setSpinnerLabel(t){ document.getElementById('spinner-label').textContent = t; }
+
+/* =========================================================
+   MAIN ORCHESTRATOR
+========================================================= */
+let RAW_ALL = [], RAW_VERIFIED = [];
+let analysisRunning = false;
+
+async function runAnalysis(){
+  if(analysisRunning) return;
+  analysisRunning = true;
+  const runBtn = document.getElementById('run-btn');
+  runBtn.disabled = true;
+  const overlay = document.getElementById('terminal-overlay');
+  termBody().innerHTML='';
+  overlay.classList.add('show');
+  setProgress(4); setSpinnerLabel('ПОДКЛЮЧЕНИЕ...');
+
+  await typeLine('> инициализация модуля анализа данных...');
+  await sleep(150);
+  await typeLine('$ sudo su');
+  await sleep(120);
+  await typeLine('> отказано. пробуем вежливо: «пожалуйста»... разрешено ✔', 'warn');
+  await sleep(180);
+  await typeLine('> цель: удалённая база данных опроса');
+  await sleep(150);
+  await typeLine('> установка защищённого соединения...', );
+  await sleep(250);
+
+  try{
+    let lastLine=null;
+    const all = await fetchAllResponses(async (count, page, more)=>{
+      setProgress(10+Math.min(55,page*12));
+      setSpinnerLabel('ЗАГРУЗКА ДАННЫХ...');
+      if(lastLine) lastLine.remove();
+      lastLine = await typeLine(`> страница ${page}: загружено анкет — ${count}${more? ' (продолжаем...)':''}`, 'tag');
+    });
+    RAW_ALL = all;
+    setProgress(70); setSpinnerLabel('ПРОВЕРКА ПОДЛИННОСТИ...');
+    await typeLine(`> всего получено документов: ${all.length}`);
+    await sleep(200);
+    await typeLine('> проверка подлинности анкет...');
+    await sleep(350);
+    const verified = all.filter(isVerified);
+    RAW_VERIFIED = verified;
+    await typeLine(`> подтверждено подлинных анкет: ${verified.length}`, );
+    await typeLine(`> отклонено (подозрительные / отправлены в обход формы): ${all.length-verified.length}`, all.length-verified.length>0?'warn':'');
+    await sleep(250);
+    setProgress(85); setSpinnerLabel('РАСПОЗНАВАНИЕ УСТРОЙСТВ...');
+    await typeLine('> разбор User-Agent: тип устройства, ОС, браузер...');
+    await sleep(250);
+    setProgress(94); setSpinnerLabel('РАСЧЁТ СТАТИСТИКИ...');
+    await typeLine('> расчёт распределений по 24 вопросам анкеты...');
+    await sleep(300);
+    await typeLine('> генерация диаграмм и визуализаций...');
+    await sleep(300);
+    await typeLine('$ sudo make coffee');
+    await sleep(150);
+    await typeLine('> ошибка: у пользователя нет прав на кофе (T_T)', 'warn');
+    await sleep(300);
+    setProgress(100); setSpinnerLabel('ГОТОВО');
+    await typeLine('> ЗАВЕРШЕНО. переключение в режим отображения ▓▓▓', 'tag');
+    await sleep(500);
+
+    buildDashboard(all, verified);
+
+    overlay.classList.remove('show');
+    const dash = document.getElementById('dashboard');
+    dash.classList.remove('hidden-init');
+    requestAnimationFrame(()=> dash.classList.add('show'));
+    setupSectionReveal();
+    runBtn.disabled = false;
+    runBtn.innerHTML = '// RE-JACK IN: ОБНОВИТЬ ДАННЫЕ //<small>&gt; netrunner.uplink --mode=resync</small>';
+  }catch(err){
+    console.error(err);
+    await typeLine('> ОШИБКА СОЕДИНЕНИЯ С БАЗОЙ ДАННЫХ', 'err');
+    await typeLine('> '+ (err && err.message ? err.message : String(err)), 'err');
+    await typeLine('> проверьте доступ к базе данных (сеть, CORS, правила доступа)', 'warn');
+    setSpinnerLabel('ОШИБКА');
+    runBtn.disabled = false;
+  }
+  analysisRunning = false;
+}
+
+function buildDashboard(all, verified){
+  renderHeroNumbers(all, verified);
+  renderDemographics(verified);
+  renderDeviceStats(verified);
+  const qroot = document.getElementById('questions-root');
+  qroot.innerHTML='';
+  let idx=3;
+  QUESTIONS.filter(q=>q.target==='default').forEach(q=>{
+    renderQuestionSection(q, verified, String(idx).padStart(2,'0'));
+    idx++;
+  });
+  buildSearchFilters(verified);
+  document.getElementById('search-go').addEventListener('click', ()=> runSearch(verified));
+  document.getElementById('search-reset').addEventListener('click', ()=>{
+    document.querySelectorAll('#search-filters select').forEach(s=>s.value='Все');
+    document.getElementById('search-result').innerHTML='';
+  });
+}
+
+function setupSectionReveal(){
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(en=>{
+      if(en.isIntersecting){ en.target.classList.add('in'); io.unobserve(en.target); }
+    });
+  }, {threshold:0.12, rootMargin:'0px 0px -60px 0px'});
+  document.querySelectorAll('.section').forEach(s=>io.observe(s));
+}
+
+/* =========================================================
+   EASTER EGGS 🥚 (5 штук — спрятаны, обычный пользователь их не найдёт)
+========================================================= */
+function showToast(text, ms){
+  ms = ms || 3000;
+  const root = document.getElementById('toast-root');
+  if(!root) return;
+  const t = document.createElement('div');
+  t.className='egg-toast';
+  t.textContent = text;
+  root.appendChild(t);
+  requestAnimationFrame(()=> t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=> t.remove(), 400); }, ms);
+}
+
+/* --- Egg 1: 5 быстрых кликов по зелёной точке статуса -> BREACH PROTOCOL (красная тревога) --- */
+let breachActive = false;
+function triggerBreachProtocol(){
+  if(breachActive) return;
+  breachActive = true;
+  const overlay = document.getElementById('breach-overlay');
+  const txt = document.getElementById('breach-text');
+  overlay.innerHTML = '';
+  document.body.classList.add('egg-breach');
+  overlay.classList.add('show');
+  txt.classList.add('show');
+  let trace = 0;
+  const setTxt = ()=>{ txt.textContent = `⚠ BREACH DETECTED ⚠\nICE COUNTERMEASURES ENGAGED\nTRACE: ${Math.round(trace)}%`; };
+  setTxt();
+  const traceIv = setInterval(()=>{ trace = Math.min(100, trace + Math.random()*22); setTxt(); if(trace>=100) clearInterval(traceIv); }, 260);
+  for(let i=0;i<22;i++){
+    setTimeout(()=>{
+      if(!breachActive) return;
+      const bar = document.createElement('div');
+      bar.className='glitch-bar';
+      bar.style.top=(Math.random()*96)+'vh';
+      bar.style.height=(2+Math.random()*10)+'px';
+      overlay.appendChild(bar);
+      setTimeout(()=> bar.remove(), 120+Math.random()*200);
+    }, i*280);
+  }
+  for(let i=0;i<34;i++){
+    setTimeout(()=>{
+      if(!breachActive) return;
+      const blk = document.createElement('div');
+      blk.className='glitch-block';
+      blk.style.left=(Math.random()*88)+'vw';
+      blk.style.top=(Math.random()*88)+'vh';
+      blk.style.width=(30+Math.random()*170)+'px';
+      blk.style.height=(6+Math.random()*36)+'px';
+      overlay.appendChild(blk);
+      setTimeout(()=> blk.remove(), 200+Math.random()*260);
+    }, i*100);
+  }
+  showToast('⚠ НЕСАНКЦИОНИРОВАННЫЙ ДОСТУП К ЯДРУ ДАННЫХ', 2200);
+  setTimeout(()=>{
+    clearInterval(traceIv);
+    overlay.classList.remove('show');
+    txt.classList.remove('show');
+    document.body.classList.remove('egg-breach');
+    breachActive = false;
+    showToast('соединение восстановлено ✔ ICE отражена', 2400);
+  }, 6800);
+}
+function initEggBreach(){
+  const dot = document.querySelector('.eyebrow-tag .dot');
+  if(!dot) return;
+  let clicks = [];
+  dot.addEventListener('click', ()=>{
+    const now = Date.now();
+    clicks.push(now);
+    clicks = clicks.filter(t=> now-t < 4000);
+    if(clicks.length>=5){ clicks=[]; triggerBreachProtocol(); }
+  });
+  // изредка точка чуть подрастает — тонкая подсказка, что по ней можно кликнуть
+  setInterval(()=>{
+    if(!breachActive && Math.random()<0.5){
+      dot.style.transform='scale(2.2)';
+      setTimeout(()=>{ dot.style.transform=''; }, 450);
+    }
+  }, 15000+Math.random()*9000);
+}
+
+/* --- Egg 2: клик по мигающему красному маяку на редкой мега-башне в силуэте города --- */
+function initEggTowerBeacon(){
+  document.querySelectorAll('.skyline .beacon').forEach(beacon=>{
+    beacon.style.pointerEvents = 'all';
+    beacon.style.cursor = 'pointer';
+    beacon.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      const tower = beacon.closest('.b');
+      const TOWER_COLORS=['#00e5ff','#3dffb0','#b34bff','#f4e04d','#ff4dd8','#2a5cff'];
+      let col; do{ col=TOWER_COLORS[Math.floor(Math.random()*TOWER_COLORS.length)]; }while(col===window.__lastTowerColor);
+      window.__lastTowerColor=col;
+      if(tower) tower.style.setProperty('--tc',col);
+      if(tower && !tower.querySelector('.tower-flash')){
+        const flash=document.createElement('div');
+        flash.className='tower-flash';
+        flash.style.setProperty('--tc',col);
+        tower.appendChild(flash);
+        setTimeout(()=> flash.remove(), 2300);
+      }
+      showToast('📡 ВХОДЯЩАЯ ТРАНСМИССИЯ ИЗ ГОЛОВНОГО ОФИСА...', 2400);
+    });
+  });
+}
+
+/* --- Egg 3: набрать "sudo" -> выезжает мини-консоль, печатает приветствие для root --- */
+let sudoBusy=false;
+async function runSudoConsole(){
+  if(sudoBusy) return; sudoBusy=true;
+  const pop=document.getElementById('sudo-popup');
+  pop.innerHTML='<div class="sudo-bar">root@terminal:~#</div><div class="sudo-body" id="sudo-body"></div>';
+  pop.classList.add('show');
+  const body=document.getElementById('sudo-body');
+  const lines=[
+    '$ sudo su',
+    '[sudo] пароль: ********',
+    '> проверка привилегий... ок',
+    '> доступ разрешён ✔',
+    '# добро пожаловать, root (^-^)/'
+  ];
+  for(const line of lines){
+    const ln=document.createElement('div'); body.appendChild(ln);
+    for(let i=0;i<line.length;i++){ ln.textContent=line.slice(0,i+1); await sleep(22); }
+    await sleep(240);
+  }
+  await sleep(2200);
+  pop.classList.remove('show');
+  sudoBusy=false;
+}
+function initEggSudo(){
+  let buf='';
+  document.addEventListener('keydown', (e)=>{
+    if(e.key.length===1) buf=(buf+e.key).slice(-10).toLowerCase();
+    if(buf.includes('sudo')){ buf=''; runSudoConsole(); }
+  });
+}
+
+/* --- Egg 4: клик по подсвеченному слову «базы данных» в подзаголовке -> «ДОСТУП ЗАПРЕЩЁН» --- */
+function initEggDbWord(){
+  const el=document.getElementById('db-word');
+  if(!el) return;
+  const orig=el.textContent;
+  const glyphs='▓▒░#@%&01';
+  let busy=false;
+  el.addEventListener('click', async ()=>{
+    if(busy) return; busy=true;
+    for(let i=0;i<12;i++){
+      el.textContent=Array.from(orig).map(c=> c===' '?' ':glyphs[Math.floor(Math.random()*glyphs.length)]).join('');
+      await sleep(55);
+    }
+    el.classList.add('denied');
+    el.textContent='▓ ДОСТУП ЗАПРЕЩЁН ▓';
+    showToast('🔒 ЛЮБОПЫТНЫХ НЕ ПУСКАЮТ', 2200);
+    await sleep(1900);
+    for(let i=0;i<8;i++){
+      el.textContent=Array.from(orig).map(c=> Math.random()<i/8? c : glyphs[Math.floor(Math.random()*glyphs.length)]).join('');
+      await sleep(50);
+    }
+    el.classList.remove('denied');
+    el.textContent=orig;
+    busy=false;
+  });
+}
+
+/* --- Egg 5: клик по человечку в разделе "Кто проходил опрос" -> подмигивает --- */
+function initEggPersonWink(){
+  document.querySelectorAll('.person-icon').forEach(icon=>{
+    icon.style.pointerEvents='all';
+    icon.style.cursor='pointer';
+    icon.addEventListener('click', ()=>{
+      if(icon.classList.contains('winking')) return;
+      icon.classList.add('winking');
+      setTimeout(()=> icon.classList.remove('winking'), 550);
+    });
+  });
+}
+
+/* --- Egg 8: 5 быстрых кликов по главному заголовку -> здания переливаются разными цветами --- */
+let rainbowActive=false;
+function initEggTitleRainbow(){
+  const h=document.querySelector('h1.title');
+  if(!h) return;
+  let clicks=[];
+  h.addEventListener('click', ()=>{
+    const now=Date.now();
+    clicks.push(now); clicks=clicks.filter(t=>now-t<3000);
+    if(clicks.length>=5 && !rainbowActive){
+      clicks=[]; rainbowActive=true;
+      const sky=document.getElementById('skyline');
+      sky.classList.add('rainbow');
+      sky.querySelectorAll('.b').forEach(b=>{ b.style.animationDelay=(-Math.random()*3).toFixed(2)+'s'; });
+      showToast('🌈 город проснулся...', 2200);
+      setTimeout(()=>{
+        sky.classList.remove('rainbow');
+        sky.querySelectorAll('.b').forEach(b=>{ b.style.animationDelay=''; });
+        rainbowActive=false;
+      }, 8000);
+    }
+  });
+}
+
+/* --- Egg 9: зажать кнопку «наверх» -> страница «глючит» жуткими заголовками и возвращается как было --- */
+let topHoldFired=false, creepyActive=false;
+const CREEPY_LINES=['ОНИ ВСЁ ВИДЯТ','НЕ ОБОРАЧИВАЙСЯ','ТЫ НЕ ОДИН НА ЭТОЙ СТРАНИЦЕ','ОШИБКА: ЧЕЛОВЕК ОБНАРУЖЕН','ПАМЯТЬ СИСТЕМЫ НЕ СТИРАЕТСЯ','ОНИ ЗНАЮТ, КАК ТЫ ГОЛОСОВАЛ','0x00DEAD','ПОЧЕМУ ТЫ ЕЩЁ ЗДЕСЬ?'];
+function triggerCreepyText(){
+  if(creepyActive) return; creepyActive=true;
+  const targets=Array.from(document.querySelectorAll('h1.title, .section-head h2, .eyebrow-tag, .subtitle'));
+  const saved=[];
+  targets.forEach(el=>{
+    const nodes=Array.from(el.childNodes);
+    const dt=el.getAttribute('data-text');
+    saved.push({el,nodes,dt});
+    const msg=CREEPY_LINES[Math.floor(Math.random()*CREEPY_LINES.length)];
+    el.replaceChildren(document.createTextNode(msg));
+    if(dt!==null) el.setAttribute('data-text',msg);
+    el.classList.add('creepy-text');
+  });
+  setTimeout(()=>{
+    saved.forEach(({el,nodes,dt})=>{
+      el.replaceChildren(...nodes);
+      if(dt!==null) el.setAttribute('data-text',dt);
+      el.classList.remove('creepy-text');
+    });
+    creepyActive=false;
+  }, 4200);
+}
+function initEggTopHold(){
+  const btn=document.getElementById('back-to-top');
+  if(!btn) return;
+  let timer=null;
+  btn.addEventListener('pointerdown', ()=>{
+    topHoldFired=false;
+    timer=setTimeout(()=>{
+      topHoldFired=true;
+      window.scrollTo({top:0,behavior:'smooth'});
+      triggerCreepyText();
+    }, 1300);
+  });
+  ['pointerup','pointerleave','pointercancel'].forEach(ev=> btn.addEventListener(ev, ()=> clearTimeout(timer)));
+  btn.addEventListener('contextmenu', e=> e.preventDefault());
+}
+
+/* --- Egg 10: клик по смайлику-оценке в шкале -> крутится как слот-машина --- */
+function initEggFaceSlot(){
+  const faces=['😖','🙁','😐','🙂','🤩'];
+  document.addEventListener('click', async (e)=>{
+    const f=e.target.closest && e.target.closest('.scale-top .face');
+    if(!f || f.dataset.spin==='1') return;
+    f.dataset.spin='1';
+    const orig=f.textContent;
+    for(let i=0;i<16;i++){ f.textContent=faces[Math.floor(Math.random()*faces.length)]; await sleep(60); }
+    f.textContent=orig;
+    f.dataset.spin='0';
+  });
+}
+
+/* --- Egg 6: тройной клик по подписи "kldev01" в футере -> приветствие улетает волной --- */
+function initEggFooterSig(){
+  const sig=document.getElementById('footer-sig');
+  if(!sig) return;
+  let n=0, timer=null;
+  sig.addEventListener('click', ()=>{
+    n++; clearTimeout(timer); timer=setTimeout(()=>{ n=0; }, 1400);
+    if(n>=3){
+      n=0;
+      const g=document.createElement('div');
+      g.className='flying-greeting';
+      g.textContent='👋 ПРИВЕТ, ЛЮБОПЫТНЫЙ СТРАННИК';
+      document.body.appendChild(g);
+      setTimeout(()=> g.remove(), 3500);
+    }
+  });
+}
+
+/* --- Egg 7: набрать слово "neo" на клавиатуре -> голубое мерцающее сообщение --- */
+function initEggSecretWord(){
+  let buf='';
+  const ghost=document.getElementById('ghost-flicker');
+  if(!ghost) return;
+  document.addEventListener('keydown', (e)=>{
+    if(e.key.length===1) buf=(buf+e.key).slice(-12).toLowerCase();
+    if(buf.includes('neo')){
+      buf='';
+      ghost.textContent='wake up, Neo...';
+      ghost.classList.remove('show'); void ghost.offsetWidth;
+      ghost.classList.add('show');
+    }
+  });
+}
+
+function initEasterEggs(){
+  initEggBreach();
+  initEggTowerBeacon();
+  initEggSudo();
+  initEggDbWord();
+  initEggPersonWink();
+  initEggTitleRainbow();
+  initEggTopHold();
+  initEggFaceSlot();
+  initEggFooterSig();
+  initEggSecretWord();
+}
+
+/* =========================================================
+   INIT
+========================================================= */
+document.addEventListener('DOMContentLoaded', ()=>{
+  initMatrix();
+  initRain();
+  initFog();
+  initParticles();
+  initSkyline();
+  initWeatherToggle();
+  initThemeToggle();
+  initBackToTop();
+  initEasterEggs();
+  document.getElementById('run-btn').addEventListener('click', runAnalysis);
+  document.getElementById('jump-search-btn').addEventListener('click', ()=>{
+    const dash = document.getElementById('dashboard');
+    if(dash.classList.contains('show')){
+      document.getElementById('sec-search').scrollIntoView({behavior:'smooth'});
+    } else {
+      runAnalysis();
+    }
+  });
+});
+</script>
+</body>
+</html>
